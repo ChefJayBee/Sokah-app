@@ -194,8 +194,9 @@ body.pv,body.mv{padding-bottom:40px}
   <div class="hint">Recipe costing, pantry and menu for the restaurant. Sign in to see the shared pantry.</div>
   <label class="f"><span>Email</span><input id="gEmail" type="email" autocomplete="username" inputmode="email" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
   <label class="f"><span>Password</span><div style="display:flex;gap:8px"><input id="gPass" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" style="flex:1"><button class="ghost sm" id="gShow" type="button">Show</button></div></label>
+  <label style="display:flex;align-items:center;gap:10px;font-size:15px;min-height:44px;cursor:pointer"><input type="checkbox" id="gKeep" checked style="width:22px;height:22px;margin:0;accent-color:var(--ember)"> Keep me signed in on this phone</label>
   <div class="btns" style="margin-top:4px"><button class="ember" id="gIn" style="flex:1">Sign in</button></div>
-  <div class="note" id="gNote">Accounts are set up by the owner. No sign-up, no emails: use the email and password you were given. You stay signed in on this phone.</div>
+  <div class="note" id="gNote">Accounts are set up by the owner. No sign-up, no emails: use the email and password you were given. </div>
 </div></div>
 <div class="gate" id="pwgate" hidden><div class="card grid">
   <h1>Change password</h1>
@@ -486,7 +487,10 @@ const EXAMPLE={name:'House BBQ sauce (example)',kind2:'COMPONENT',batchQty:100,b
 let rec=JSON.parse(JSON.stringify(EXAMPLE)); let recId=null; let db=null, lib=[]; let openPick=null; let isDirty=false;
 // ---------- Supabase: one table "docs" (collection, id, data) + a private "invoices" bucket. Same call shapes the page already uses. ----------
 const SB_URL='https://jazyvgoinjrajzcrznif.supabase.co', SB_KEY='sb_publishable_qanEuSvb3c28Cqw1SWURAw_ipOMInIk';
-const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
+// "Keep me signed in": on (default) keeps the session in localStorage so it survives closing the app; off keeps it only while the app is open.
+const keepSignedIn=()=>{ try{ return localStorage.getItem('sokah-keep')!=='0'; }catch(e){ return true; } };
+const sessionStore={ _s(){ return keepSignedIn()?localStorage:sessionStorage; }, getItem(k){ try{ return this._s().getItem(k); }catch(e){ return null; } }, setItem(k,v){ try{ this._s().setItem(k,v); }catch(e){} }, removeItem(k){ try{ localStorage.removeItem(k); sessionStorage.removeItem(k); }catch(e){} } };
+const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY,{auth:{storage:sessionStore,persistSession:true,autoRefreshToken:true}}):null;
 function makeDb(){ const q=(c)=>({ _c:c,_lim:1000,_ord:null,
    doc(id){ return { async set(body){ const {error}=await sb.from('docs').upsert({collection:c,id,data:body},{onConflict:'collection,id'}); if(error) throw new Error(error.message); },
                     async get(){ const {data,error}=await sb.from('docs').select('data').eq('collection',c).eq('id',id).maybeSingle(); if(error) throw new Error(error.message); return {exists:!!data,data:()=>data?data.data:undefined}; },
@@ -926,9 +930,11 @@ function renderMenu(){ const plates=lib.filter(x=>(x.kind2||'PLATE')==='PLATE').
 function showGate(on,msg){ $('gate').hidden=!on; if(msg) $('gNote').textContent=msg; }
 async function signedIn(){ const {data}=await sb.auth.getSession(); return data.session||null; }
 function wireGate(){
+try{ $('gKeep').checked=keepSignedIn(); }catch(e){}
 $('gShow').onclick=()=>{ const i=$('gPass'); i.type=i.type==='password'?'text':'password'; $('gShow').textContent=i.type==='password'?'Show':'Hide'; };
 $('pwShow').onclick=()=>{ const i=$('pw1'); i.type=i.type==='password'?'text':'password'; $('pwShow').textContent=i.type==='password'?'Show':'Hide'; };
 $('gIn').onclick=async()=>{ const email=$('gEmail').value.trim().toLowerCase(), password=$('gPass').value; if(!email||!password){ showGate(true,'Type your email and password.'); return; }
+  try{ localStorage.setItem('sokah-keep',$('gKeep').checked?'1':'0'); }catch(e){}
   $('gIn').disabled=true; $('gIn').textContent='Signing in…';
   const {error}=await sb.auth.signInWithPassword({email,password}); $('gIn').disabled=false; $('gIn').textContent='Sign in';
   if(error){ showGate(true,/invalid/i.test(error.message)?'That email and password do not match. Check for a typo (tap Show to see the password), or ask the owner to reset it.':'Could not sign in: '+error.message); return; } location.reload(); };
