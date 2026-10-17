@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKAH Kitchen</title>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#2B2420">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="SOKAH">
+<link rel="apple-touch-icon" href="icon-192.png"><link rel="icon" href="icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column, phone first, in four numbered steps. A live "next move" card tells the cook where they are. Sticky result bar at the bottom. */
+:root{
+  --bg:#FBF7F2; --surface:#FFFFFF; --ink:#2B2420; --muted:#7A6F66; --line:#E2DAD1;
+  --ember:#D9541E; --gold:#E8A33D; --green:#1F6B52; --input:#EAF2FB; --input-ink:#12355B; --tint:#F4EEE6;
+  --ok-bg:#E3F2EA; --ok-ink:#1F6B52; --check-bg:#FFF1D6; --check-ink:#8A5300; --fix-bg:#FBE3E0; --fix-ink:#9C1C1C;
+  --bar-bg:#2B2420; --bar-fg:#FFFFFF; --bar-muted:#CDBFB3; --bar-line:#4A403A; --bar-good:#9ADBBE; --bar-warn:#F3C77A; --bar-bad:#F5A39B;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif; --body:"Barlow",Arial,Helvetica,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#1C1816; --surface:#262120; --ink:#F3ECE4; --muted:#A89C92; --line:#3B3330;
+  --ember:#F0703A; --gold:#F0B55A; --green:#4FA886; --input:#23303D; --input-ink:#CFE2F7; --tint:#2E2724;
+  --ok-bg:#1E3A2E; --ok-ink:#8FD3B4; --check-bg:#4A3614; --check-ink:#F3C77A; --fix-bg:#4A1F1C; --fix-ink:#F5A39B;
+  --bar-bg:#0F0D0C; --bar-fg:#F3ECE4; --bar-muted:#A89C92; --bar-line:#3B3330; --bar-good:#8FD3B4; --bar-warn:#F3C77A; --bar-bad:#F5A39B;
+  color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#1C1816; --surface:#262120; --ink:#F3ECE4; --muted:#A89C92; --line:#3B3330;
+  --ember:#F0703A; --gold:#F0B55A; --green:#4FA886; --input:#23303D; --input-ink:#CFE2F7; --tint:#2E2724;
+  --ok-bg:#1E3A2E; --ok-ink:#8FD3B4; --check-bg:#4A3614; --check-ink:#F3C77A; --fix-bg:#4A1F1C; --fix-ink:#F5A39B;
+  --bar-bg:#0F0D0C; --bar-fg:#F3ECE4; --bar-muted:#A89C92; --bar-line:#3B3330; --bar-good:#8FD3B4; --bar-warn:#F3C77A; --bar-bad:#F5A39B;
+  color-scheme:dark }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{min-height:100%}
+html{scroll-padding-bottom:220px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 220px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--ink)}
+.wrap{max-width:720px;margin:0 auto}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:12px 0 8px;border-bottom:2px solid var(--ember);display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+h1{font:700 23px/1 var(--display);margin:0;letter-spacing:.02em;text-transform:uppercase}
+h1 span{color:var(--ember)}
+.tag{font:600 11px/1 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h2{font:700 19px/1.1 var(--display);text-transform:uppercase;letter-spacing:.04em;margin:0;text-wrap:balance;display:flex;align-items:center;gap:8px}
+h2 .n{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--ember);color:#fff;font-size:15px}
+h2 .n.done{background:var(--green)}
+section{margin-top:24px}
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
+.do{font-size:14px;color:var(--muted);margin:0 0 10px}
+.hint{font-size:13px;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.grid{display:grid;gap:10px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}
+@media (max-width:380px){.g3{grid-template-columns:1fr 1fr}}
+label.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+label.f>span{font:600 11px/1.15 var(--body);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+input,select{font:500 17px/1.2 var(--body);color:var(--input-ink);background:var(--input);border:1px solid transparent;border-radius:8px;padding:11px 10px;width:100%;min-width:0;min-height:44px}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--ember);outline-offset:1px}
+input[type=number]{font-variant-numeric:tabular-nums}
+.row{border-top:1px solid var(--line);padding:14px 0}
+.row:first-of-type{border-top:0;padding-top:0}
+.row-top{display:flex;gap:8px;align-items:center}
+.row-top input{flex:1}
+.chip{font:600 11px/1 var(--body);letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:8px 10px;min-height:36px;white-space:nowrap}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.sub{font:600 11px/1.15 var(--body);letter-spacing:.05em;text-transform:uppercase;color:var(--ember);margin:10px 0 4px}
+.row-mid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row-yield{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+.row-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;font-size:13px}
+.row-foot .cost{font:700 20px/1 var(--display);font-variant-numeric:tabular-nums}
+.status{font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;display:inline-block}
+.status.ok{background:var(--ok-bg);color:var(--ok-ink)}.status.check{background:var(--check-bg);color:var(--check-ink)}.status.fix{background:var(--fix-bg);color:var(--fix-ink)}
+button{font:600 15px/1 var(--body);border:0;border-radius:8px;padding:12px 14px;min-height:44px;cursor:pointer;color:var(--bg);background:var(--ink)}
+button.ember{background:var(--ember);color:#fff}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.sm{min-height:36px;padding:8px 10px;font-size:13px}
+button.danger{color:var(--fix-ink);background:var(--fix-bg)}
+button.q{width:28px;height:28px;min-height:28px;padding:0;border-radius:50%;background:var(--tint);color:var(--muted);font-weight:700;border:1px solid var(--line)}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btns small{flex-basis:100%;color:var(--muted);font-size:12px}
+.explain{background:var(--tint);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:10px}
+.explain b{display:block;font-family:var(--display);font-size:16px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px}
+.explain dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 10px}
+.explain dt{font-weight:600;white-space:nowrap}.explain dd{margin:0;color:var(--muted)}
+.guide{background:var(--bar-bg);color:var(--bar-fg);border-radius:10px;padding:14px;margin-top:16px}
+.guide h3{font:700 20px/1 var(--display);text-transform:uppercase;margin:0 0 10px;letter-spacing:.03em;color:var(--bar-fg)}
+.guide ol{margin:0;padding-left:22px;display:grid;gap:6px;font-size:15px}
+.guide ol b{color:var(--gold)}
+.guide .btns{margin-top:10px}
+.guide button{background:var(--gold);color:var(--ink)}
+.next{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--ember);border-radius:10px;padding:12px 14px;margin-top:16px}
+.next .big{font:700 30px/1 var(--display);color:var(--ember)}
+.next .t{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.next .m{font-size:15px;font-weight:600}
+.steps{display:flex;gap:6px;margin-top:8px}
+.steps i{flex:1;height:5px;border-radius:3px;background:var(--line)}
+.steps i.on{background:var(--green)}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--bar-bg);color:var(--bar-fg);border-top:1px solid var(--bar-line);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+.bar .in{max-width:720px;margin:0 auto}
+.bar .k4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;cursor:pointer}
+.kpi{min-width:0}
+.kpi b{display:block;font:700 22px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--bar-fg)}
+.kpi b.good{color:var(--bar-good)}.kpi b.warn{color:var(--bar-warn)}.kpi b.bad{color:var(--bar-bad)}
+.kpi span{display:block;font:600 10px/1.2 var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--bar-muted);margin-top:4px}
+.bar .legend{font-size:13px;color:var(--bar-muted);margin-top:10px;display:grid;gap:4px;border-top:1px solid var(--bar-line);padding-top:8px}
+.bar .legend b{color:var(--bar-fg)}
+.bar .tap{font-size:11px;color:var(--bar-muted);text-align:center;margin-top:6px;letter-spacing:.05em;text-transform:uppercase}
+.share{display:grid;gap:6px;margin-top:10px}
+.share .s{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;font-size:13px}
+.share .track{height:6px;background:var(--line);border-radius:3px;overflow:hidden;grid-column:1/-1}
+.share .fill{height:100%;background:var(--ember)}
+.note{font-size:13px;color:var(--muted);margin-top:8px}
+.example{background:var(--check-bg);color:var(--check-ink);font-size:12px;font-weight:600;padding:6px 10px;border-radius:6px;display:inline-block}
+.lib{display:grid;gap:8px}
+.lib .r{display:grid;grid-template-columns:1fr;gap:8px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.lib .r>div:last-child{display:flex;gap:6px;flex-wrap:wrap}
+.lib .r b{font-family:var(--display);font-size:17px;font-weight:700}
+.lib .r small{color:var(--muted);display:block;font-size:12px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(130px + env(safe-area-inset-bottom,0px));background:var(--green);color:#fff;padding:10px 14px;border-radius:8px;font-weight:600;z-index:7;max-width:90vw}
+.ypick{margin-top:8px;background:var(--tint);border-radius:8px;padding:10px}
+.ypick .ylist{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;font-size:13px}
+@media (max-width:420px){.ypick .ylist{grid-template-columns:1fr}}
+.ypick .ylist button{display:flex;justify-content:space-between;background:var(--surface);color:var(--ink);border:1px solid var(--line);min-height:40px;font-weight:500}
+.dial{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}
+.dial-head{display:flex;justify-content:space-between;align-items:baseline}
+.dial-head b{font:700 26px/1 var(--display);color:var(--ember);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;min-height:36px;padding:0;background:transparent;accent-color:var(--ember);margin:6px 0}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{background:var(--tint);color:var(--ink);border:1px solid var(--line);min-height:36px;padding:8px 12px;font-size:14px;font-variant-numeric:tabular-nums}
+.chips button.on{background:var(--ember);color:#fff;border-color:var(--ember)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;background:var(--surface);color:var(--muted);border-radius:0;font-size:14px;padding:10px 8px}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.pf{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-top:10px}
+.pf-in{display:flex;align-items:center;background:var(--input);border-radius:8px;padding-left:10px}
+.pf-in .cur{color:var(--input-ink);font-weight:600}
+.pf-in input{background:transparent;padding-left:4px}
+.dial-read{margin-top:10px;font-size:15px;line-height:1.45}
+.dial-read b{font-family:var(--display);font-size:18px}
+.dial-read .over{color:var(--fix-ink);font-weight:600}.dial-read .under{color:var(--ok-ink);font-weight:600}
+body.comp .plate-only{display:none!important}
+body:not(.comp) .comp-only{display:none!important}
+.try{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.try span{font:600 11px/1 var(--body);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.try button{background:var(--tint);color:var(--ink);border:1px solid var(--line);min-height:34px;padding:6px 10px;font-size:13px;font-variant-numeric:tabular-nums}
+.try button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.lever{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.lv-main{font-size:15px;margin-top:4px;line-height:1.45}
+.lv-fix{margin-top:8px;background:var(--check-bg);color:var(--check-ink);border-radius:8px;padding:10px 12px;font-size:15px;line-height:1.45;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lv-fix.under{background:var(--ok-bg);color:var(--ok-ink)}
+.lv-fix button{margin-left:auto}
+.sugg{display:grid;gap:4px;margin-top:6px;background:var(--tint);border:1px solid var(--line);border-radius:8px;padding:6px}
+.sugg button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:var(--surface);color:var(--ink);border:1px solid var(--line);min-height:44px;text-align:left;font-weight:600;font-size:15px}
+.sugg button small{font-weight:500;font-size:12px;color:var(--muted)}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kv b{font:700 22px/1 var(--display);display:block}
+/* pantry view: one button in the header flips between the recipe steps and the pantry */
+body.pv #guide,body.pv #next,body.pv #s1,body.pv #s2,body.pv #s3,body.pv #s4,body.pv .bar,body.mv #guide,body.mv #next,body.mv #s1,body.mv #s2,body.mv #s3,body.mv #s4,body.mv .bar{display:none!important}
+body:not(.pv) #pantryView{display:none!important}
+body:not(.mv) #menuView{display:none!important}
+body.pv,body.mv{padding-bottom:40px}
+.vseg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.vseg button{min-height:34px;padding:6px 8px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;background:var(--surface);color:var(--muted);border-radius:0}
+.vseg button.on{background:var(--ember);color:#fff}
+.mi{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:12px}
+.mi .top{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
+.mi b.nm{font-family:var(--display);font-size:18px;font-weight:700;display:block}
+.mi small{color:var(--muted);font-size:12px;display:block}
+.mi .ap{font:700 24px/1 var(--display);font-variant-numeric:tabular-nums;text-align:right}
+.mi .btns{margin-top:8px}
+.pi{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.pi b{font-family:var(--display);font-size:17px;font-weight:700;display:block;cursor:pointer}
+.pi small{color:var(--muted);font-size:12px;display:block}
+.pi .acts{display:flex;gap:6px;align-items:center}
+.pi .acts button{min-height:34px;padding:6px 10px;font-size:12px;font-weight:700;letter-spacing:.04em;background:var(--tint);color:var(--muted);border:1px solid var(--line)}
+.pi .acts button.low.on{background:var(--check-bg);color:var(--check-ink);border-color:transparent}
+.pi .acts button.out.on{background:var(--fix-bg);color:var(--fix-ink);border-color:transparent}
+.pi .acts button.ord{width:34px;padding:0;font-size:18px;border-radius:50%}
+.pi .acts button.ord.on{background:var(--ember);color:#fff;border-color:var(--ember)}
+.pi.low{border-left:4px solid var(--gold)}.pi.out{border-left:4px solid var(--fix-ink)}
+.olist{display:grid;gap:6px}
+.olist .o{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;font-size:14px;padding:8px 10px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.olist .o b{font-variant-numeric:tabular-nums}
+.inv{display:grid;grid-template-columns:72px 1fr auto;gap:10px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.inv img{width:72px;height:72px;object-fit:cover;border-radius:6px;background:var(--tint)}
+.inv small{color:var(--muted);font-size:12px;display:block}
+.search{margin-bottom:10px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.gate{position:fixed;inset:0;z-index:50;background:var(--bg);display:grid;place-items:center;padding:20px}
+.gate .card{width:100%;max-width:380px}
+</style></head><body>
+
+<div class="gate" id="gate" hidden><div class="card grid">
+  <h1>SOKAH <span>·</span> Kitchen</h1>
+  <div class="hint">Recipe costing, pantry and menu for the restaurant. Sign in to see the shared pantry.</div>
+  <label class="f"><span>Email</span><input id="gEmail" type="email" autocomplete="username" inputmode="email"></label>
+  <label class="f"><span>Password</span><input id="gPass" type="password" autocomplete="current-password"></label>
+  <div class="btns" style="margin-top:4px"><button class="ember" id="gIn" style="flex:1">Sign in</button><button class="ghost" id="gUp">Create account</button></div>
+  <div class="note" id="gNote">First time? Tap Create account with the email the owner added; you will get a confirmation email, then sign in.</div>
+  <div class="btns"><button class="ghost sm" id="gForgot">Forgot password</button></div>
+</div></div>
+
+<div class="wrap">
+<header>
+  <div><h1>SOKAH <span>·</span> <span id="hTitle" style="color:inherit">Recipes</span></h1><span class="tag" id="savestate" style="display:block;margin-top:3px">not saved</span><button class="ghost sm" id="signout" hidden style="margin-top:6px;min-height:26px;padding:2px 8px;font-size:11px">Sign out</button></div>
+  <div style="display:flex;gap:10px;align-items:center"><div class="vseg" id="viewSeg"><button data-view="recipe" class="on">Recipe</button><button data-view="pantry">Pantry</button><button data-view="menu">Menu</button></div></div>
+</header>
+
+<div id="pantryView">
+  <section style="margin-top:14px" id="apprSec" hidden>
+    <div class="sec-head"><h2>Prices waiting for approval</h2><button class="q" data-x="xap" aria-label="What is this?">?</button></div>
+    <p class="do">New invoice prices wait here. Approve them with your name and every recipe uses them as real. Reject a typo and the old price stays.</p>
+    <div class="explain" id="xap" hidden><dl>
+      <dt>Approve all</dt><dd>Marks every waiting price APPROVED with your name and today's date. The CHECK marks on those items clear.</dd>
+      <dt>Reject</dt><dd>Keeps the item but drops this price back to what it was before (or no price, if it was new). Use it for a typo or a wrong pack size.</dd>
+      <dt>Workbook</dt><dd>Approvals are copied to the workbook's PRICES tab when Claude next refreshes it.</dd>
+    </dl></div>
+    <div class="card"><div class="grid g2"><label class="f"><span>Your name</span><input id="apName" placeholder="who is approving"></label><div style="display:flex;align-items:end"><button class="ember" id="apAll" style="width:100%">Approve all waiting</button></div></div><div class="list" id="apList" style="margin-top:10px;display:grid;gap:8px"></div></div>
+  </section>
+  <section style="margin-top:14px">
+    <div class="sec-head"><h2>Order list</h2><button class="q" data-x="xo" aria-label="What is this?">?</button></div>
+    <p class="do">Starts blank. Tap the <b>+</b> on any pantry item to put it here. Copy it when you call the order in.</p>
+    <div class="explain" id="xo" hidden><dl>
+      <dt>+</dt><dd>Adds the item to this list. Tap again to take it off.</dd>
+      <dt>LOW / OUT</dt><dd>A quick mark while you walk the kitchen. It does not add to the order by itself; the + does.</dd>
+      <dt>Copy order</dt><dd>Puts the list on your clipboard as plain text, grouped by vendor, with the last price you paid.</dd>
+    </dl></div>
+    <div class="card"><div class="olist" id="olist"></div><div class="btns" style="margin-top:10px"><button class="ember sm" id="oCopy">Copy order</button><button class="ghost sm" id="oClear">Clear order</button><small id="oSum"></small></div></div>
+  </section>
+  <section>
+    <div class="sec-head"><h2>Invoices</h2><button class="q" data-x="xi" aria-label="What is this?">?</button></div>
+    <p class="do">Snap the invoice when it lands so it is never lost. Then type the new prices into the pantry when you have a minute.</p>
+    <div class="explain" id="xi" hidden><dl>
+      <dt>Add invoice photo</dt><dd>Opens your camera (or photos). The picture is saved on this page under NEW.</dd>
+      <dt>Then</dt><dd>Tell Claude "new invoice". The new prices show up at the top of this screen waiting for your approval; approve them with your name. The workbook gets the same lines when Claude refreshes it.</dd>
+    </dl></div>
+    <div class="card"><input id="invFile" type="file" accept="image/*,application/pdf" hidden><div class="btns" style="margin:0"><button class="ember" id="invBtn">📷 Add invoice photo</button></div><div class="note" id="invNote"></div><div class="list" id="invList" style="margin-top:10px;display:grid;gap:8px"></div></div>
+  </section>
+  <section>
+    <div class="sec-head"><h2>Pantry</h2><button class="q" data-x="xpa" aria-label="What is this?">?</button></div>
+    <p class="do">Everything you buy, with the price behind it. Recipes pick from this list.</p>
+    <div class="explain" id="xpa" hidden><dl>
+      <dt>Price</dt><dd>What you paid for one pack, and what that makes per oz / lb / each. Tap the name to change it.</dd>
+      <dt>Usable %</dt><dd>How much is left after trim. Standard estimates show CHECK until you weigh your own.</dd>
+      <dt>Pending</dt><dd>An invoice price you have not approved yet (the card at the top of this screen). It still costs recipes, marked CHECK, until you approve it.</dd>
+      <dt>Delete</dt><dd>Inside the item. Blocked while a saved recipe uses it.</dd>
+    </dl></div>
+    <input class="search" id="paSearch" placeholder="search the pantry">
+    <div class="btns" style="margin:0 0 10px"><button class="ember" id="paNew">+ Add an item</button><small id="paHint"></small></div>
+    <div class="card" id="paForm" hidden style="margin-bottom:10px"></div>
+    <div class="list" id="paList" style="display:grid;gap:8px"></div>
+  </section>
+</div>
+
+<div id="menuView">
+  <section style="margin-top:14px">
+    <div class="sec-head"><h2>Menu</h2><button class="q" data-x="xm" aria-label="What is this?">?</button></div>
+    <p class="do">Every plate you have saved: what it costs, what it sells for, and the food cost % that gives. Setting a price here is the deliberate step, with your name on it.</p>
+    <div class="explain" id="xm" hidden><dl>
+      <dt>Approved price</dt><dd>The price you set here, newest first. Old prices stay as history. Recipes use it for food cost % unless you are trying a different price in step 3.</dd>
+      <dt>Suggested</dt><dd>Food per portion ÷ the plate's target, rounded up to $0.50. An idea, not a change.</dd>
+      <dt>Food cost %</dt><dd>Food per portion ÷ approved price. Green at or under target, amber under 35%, red above.</dd>
+      <dt>Sides</dt><dd>A side marked "goes into other recipes" is not listed; it is priced through the plates that use it. A side you also sell on its own: mark it "sold as a plate" and price it here.</dd>
+    </dl></div>
+    <div class="list" id="menuList" style="display:grid;gap:10px"></div>
+  </section>
+</div>
+
+<div class="guide" id="guide">
+  <h3>How this works · 4 steps</h3>
+  <ol>
+    <li><b>Name it.</b> The recipe, how much one batch makes, and how big one portion is.</li>
+    <li><b>Add what goes in.</b> For each ingredient: the amount you use, what you paid, and how much of it is usable after trim.</li>
+    <li><b>Read the numbers.</b> The bar at the bottom updates as you type: batch cost, cost per portion, a suggested price, and your food cost %.</li>
+    <li><b>Save it.</b> Saved recipes stay on this page. Open one later, copy it, set its price on Menu, or send it to the workbook.</li>
+  </ol>
+  <div class="btns"><button id="guideOk">Got it</button><span class="hint" style="color:var(--bar-muted);align-self:center">You can reopen this from the ? next to "Recipe"</span></div>
+</div>
+
+<div class="next" id="next"><div class="big" id="nextN">1</div><div><div class="t">You are on step <span id="nextS">1 of 4</span></div><div class="m" id="nextM"></div><div class="steps" id="stepsBar"><i></i><i></i><i></i><i></i></div></div></div>
+
+<section id="s1">
+  <div class="sec-head"><h2><span class="n" id="step1">1</span>Name it</h2><div style="display:flex;gap:8px;align-items:center"><span class="example" id="exampleTag">EXAMPLE numbers</span><button class="q" data-x="x1" aria-label="What goes here?">?</button></div></div>
+  <p class="do">What is this recipe, how much does one batch make, and how big is one portion?</p>
+  <div class="explain" id="x1" hidden><b>What each box means</b><dl>
+    <dt>This recipe is</dt><dd>"Sold as a plate" = a customer buys it, so it gets pricing. "Goes into other recipes" = a sauce, rub or side that feeds plates; it only needs a cost per portion, no price.</dd>
+    <dt>Recipe name</dt><dd>What you call it on the line. "House BBQ sauce", "Mac & cheese".</dd>
+    <dt>Batch makes</dt><dd>How much one batch gives you, in whatever you measure it in: 16 portions, 5 lb, 100 fl oz.</dd>
+    <dt>Portion size</dt><dd>How much goes on one plate, in the same unit. Batch ÷ portion = number of portions.</dd>
+    <dt>Target food cost %</dt><dd>The share of the price you want food to cost. 32% means a $10 plate should have about $3.20 of food on it.</dd>
+    <dt>Menu price</dt><dd>Only if this is already sold as-is. Type it and the bar shows your real food cost %.</dd>
+  </dl></div>
+  <div class="card grid">
+    <div>
+      <div class="tag" style="margin-bottom:6px">This recipe is</div>
+      <div class="seg" id="kindSeg"><button data-v="PLATE">Sold as a plate</button><button data-v="COMPONENT">Goes into other recipes</button></div>
+      <div class="note" id="kindNote"></div>
+    </div>
+    <label class="f"><span>Recipe name</span><input id="name" placeholder="e.g. House BBQ sauce"></label>
+    <div class="grid g3">
+      <label class="f"><span>One batch makes</span><input id="batchQty" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 16"></label>
+      <label class="f"><span>Measured in</span><select id="batchUnit"><option>portion</option><option>lb</option><option>oz</option><option>fl oz</option><option>qt</option><option>gal</option><option>each</option></select></label>
+      <label class="f"><span>One portion is</span><input id="portionSize" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 1"></label>
+    </div>
+    <div class="note" id="portionNote"></div>
+    <div class="grid g2 plate-only">
+      <label class="f"><span>Target food cost %</span><input id="target" type="number" inputmode="decimal" min="1" max="99" step="1"></label>
+      <label class="f"><span>Try a menu price $ <span id="apHint" style="text-transform:none;letter-spacing:0"></span></span><input id="menuPrice" type="number" inputmode="decimal" min="0" step="0.01" placeholder="leave blank"></label>
+    </div>
+  </div>
+</section>
+
+<section id="s2">
+  <div class="sec-head"><h2><span class="n" id="step2">2</span>Add what goes in</h2><button class="q" data-x="x2" aria-label="What goes here?">?</button></div>
+  <p class="do">One line per ingredient. Type the amount you actually use; the yield adds the trim you threw away.</p>
+  <div class="explain" id="x2" hidden><b>What each box means</b><dl>
+    <dt>Ingredient name</dt><dd>Start typing. Your pantry offers matches (open it with the Pantry button up top). Tap one and the price and pack fill in. Not there yet? Type the price here; saving the recipe adds it to the pantry.</dd>
+    <dt>Amount you use</dt><dd>What goes in the pot, after peeling and trimming. 2 lb of diced onion is 2 lb here.</dd>
+    <dt>Unit</dt><dd>oz and lb are weight. fl oz, cup, qt, gal are volume. Weight and volume never convert into each other.</dd>
+    <dt>You paid / for this much</dt><dd>Straight off the invoice: $25 for a 50 lb bag. The page works out the price per lb.</dd>
+    <dt>Usable after trim</dt><dd>How much of what you bought you can actually cook with. Whole onions: about 88%. Frozen fries, cheese, butter: 100%.</dd>
+    <dt>Yield is</dt><dd>"Standard estimate" = a typical published number. "Weighed by us" = you weighed a case before and after trim. Standard ones show CHECK until you weigh your own.</dd>
+    <dt>FOOD / PACKAGING</dt><dd>Tap to switch. Containers and lids count in the cost, but never in food cost %.</dd>
+    <dt>+ Add a saved recipe</dt><dd>Puts a saved side or sauce on this plate as one line: "1 portion of Rice of the day". It costs from that recipe's live numbers, so if the rice changes, the plate changes. A side can be sold on its own and still go on a plate; only one level deep (a plate cannot go inside a plate that is inside a plate).</dd>
+  </dl></div>
+  <div class="card" id="rows"></div>
+  <div class="btns"><button class="ember" id="addRow">+ Add an ingredient</button><button class="ghost" id="addPack">+ Add a container or packaging</button><button class="ghost" id="addComp">+ Add a saved recipe</button></div>
+  <div class="card" id="compPick" hidden></div>
+</section>
+
+<section id="s3">
+  <div class="sec-head"><h2><span class="n" id="step3">3</span>Read the numbers</h2><button class="q" data-x="x3" aria-label="What goes here?">?</button></div>
+  <p class="do">Nothing to type here. This is what the recipe costs and what it could sell for.</p>
+  <div class="explain" id="x3" hidden><b>What the numbers mean</b><dl>
+    <dt>Target dial</dt><dd>The food cost % you want this recipe to hit. Slide it or tap a number and the suggested price follows. Each recipe keeps its own target; 32% is the house default.</dd>
+    <dt>Food, whole batch</dt><dd>Every food line added up. Packaging is not in here.</dd>
+    <dt>Food per portion</dt><dd>Batch food cost ÷ number of portions.</dd>
+    <dt>Suggested price</dt><dd>Food per portion ÷ your target %, rounded up to the next $0.50. It is a suggestion. The real price is set on Menu, with your name on it.</dd>
+    <dt>Food cost %</dt><dd>Food per portion ÷ the menu price you typed. Green = at or under target. Amber = over target but under 35%. Red = over 35%.</dd>
+    <dt>Left after food + packaging</dt><dd>Menu price minus food and packaging. Not profit: labor, rent and card fees still come out of it.</dd>
+  </dl></div>
+  <div class="card">
+    <div class="dial plate-only">
+      <div class="dial-head"><span class="tag">Target food cost for this plate</span><b id="dialOut">32%</b></div>
+      <input id="targetSlider" type="range" min="18" max="45" step="1" value="32" aria-label="Target food cost percent">
+      <div class="chips" id="chips"><button data-t="25">25%</button><button data-t="28">28%</button><button data-t="30">30%</button><button data-t="32">32%</button><button data-t="35">35%</button><button data-t="38">38%</button></div>
+      <div class="pf"><label class="f"><span>Or start from the price you want</span><div class="pf-in"><span class="cur">$</span><input id="priceIn" type="number" inputmode="decimal" min="0" step="0.50" placeholder="e.g. 14.00"></div></label><button class="ghost sm" id="priceClear">clear</button></div>
+      <div class="dial-read" id="dialNote"></div>
+    </div>
+    <div class="comp-only note" id="compNote"></div>
+    <div id="summary"></div>
+    <div class="share" id="share"></div>
+  </div>
+</section>
+
+<section id="s4">
+  <div class="sec-head"><h2><span class="n" id="step4">4</span>Save it</h2><button class="q" data-x="x4" aria-label="What goes here?">?</button></div>
+  <p class="do">Keep it so you can open it later, copy it for a new version, or send it to the workbook.</p>
+  <div class="explain" id="x4" hidden><b>What the buttons do</b><dl>
+    <dt>Save this recipe</dt><dd>Keeps it under its name. Saving again overwrites the same recipe.</dd>
+    <dt>Save a copy</dt><dd>Keeps a second one with "(copy)" on the name. Use it for a new version: tweak the copy, keep the original.</dd>
+    <dt>Start a new recipe</dt><dd>Clears the page for the next recipe. Save first if you want to keep what is on screen.</dd>
+    <dt>Open / Delete</dt><dd>Open loads a saved recipe into the page. Delete asks twice.</dd>
+    <dt>Send to workbook</dt><dd>Makes a transfer code for this recipe. Send it to Claude and the recipe lands on the workbook's RECIPES and LINES tabs with every line. Any ingredient the workbook does not know yet is added to its PANTRY.</dd>
+  </dl></div>
+  <div class="btns" style="margin:0 0 10px"><button id="save">Save this recipe</button><button class="ghost" id="dup">Save a copy</button><button class="ghost" id="newr">Start a new recipe</button><small id="libhint"></small></div>
+  <div class="lib" id="lib"></div>
+</section>
+</div>
+
+<div class="bar"><div class="in">
+  <div class="k4" id="barTap" role="button" aria-label="Explain these numbers">
+    <div class="kpi"><b id="kBatch">$0.00</b><span>batch food</span></div>
+    <div class="kpi"><b id="kPortion">$0.00</b><span>per portion</span></div>
+    <div class="kpi"><b id="kPrice">$0.00</b><span id="kPriceLab">price @ 32%</span></div>
+    <div class="kpi"><b id="kFc">—</b><span id="kFcLab">food cost %</span></div>
+  </div>
+  <div class="legend" id="legend" hidden></div>
+  <div class="tap" id="tapHint">tap the numbers to see what they mean</div>
+</div></div>
+
+<script>
+// ---------- units: weight and volume never convert into each other (needs a measured density) ----------
+const U={oz:['W',1/16],lb:['W',1],g:['W',1/453.59237],kg:['W',1000/453.59237],
+ tsp:['V',1/6],tbsp:['V',0.5],'fl oz':['V',1],cup:['V',8],pt:['V',16],qt:['V',32],gal:['V',128],mL:['V',1/29.5735],L:['V',1000/29.5735],
+ each:['C',1],dozen:['C',12],portion:['P',1]};
+const UNITS=Object.keys(U);
+const YIELDS=[['Onion, yellow',88],['Onion, red',85],['Scallion',80],['Garlic, whole heads',87],['Shallot',85],['Bell pepper',82],['Scotch bonnet / habanero',85],['Jalapeno',88],
+ ['Celery',75],['Carrot',80],['Cabbage, green',80],['Collard greens',60],['Kale',70],['Spinach',85],['Lettuce, romaine',75],['Sweet potato, fresh',80],['Potato, russet',81],
+ ['Plantain',65],['Cassava / yuca',70],['Tomato',90],['Cucumber',95],['Mushroom',95],['Corn on the cob',60],['Ginger',80],['Thyme (leaves)',50],['Cilantro',65],['Parsley',70],
+ ['Lime (juice)',40],['Lemon (juice)',45],['Pineapple',50],['Mango',65],['Chicken, whole to raw parts',70],['Pork shoulder, bone-in to trimmed',75],['Brisket, packer to trimmed raw',85]];
+
+// ---------- pantry: real Gordon invoice #9041199819 (2026-10-12). Price = invoice line + its fuel share, same as the workbook. PENDING until approved there. ----------
+const INV='GFS #9041199819 · Oct 12 2026';
+const PANTRY_SEED=[
+ {name:'Brisket, sliced (bought raw as Angus Choice packer)',price:+(5.09+18.16/202.86).toFixed(4),packQty:1,packUnit:'lb',unit:'oz',kind:'FOOD',yield:50,ySrc:'STD',code:'564012',wid:'Y-BRISKET',note:'yield 50% raw-to-sliced is a placeholder until you weigh a cook'},
+ {name:'Butter, unsalted',price:85.60,packQty:36,packUnit:'lb',unit:'oz',kind:'FOOD',yield:100,code:'299405',wid:'ING-BUTTER'},
+ {name:'Jasmine rice (dry)',price:30.00,packQty:25,packUnit:'lb',unit:'lb',kind:'FOOD',yield:100,code:'230782',wid:'ING-RICE-JASMINE'},
+ {name:'Beef bouillon base (Knorr)',price:80.03,packQty:17.6,packUnit:'lb',unit:'oz',kind:'FOOD',yield:100,code:'972380',wid:'ING-BOUILLON-BEEF'},
+ {name:'American cheese, sliced',price:16.95,packQty:240,packUnit:'each',unit:'each',kind:'FOOD',yield:100,code:'164216',wid:'ING-CHEESE-AMER',note:'2 packs x 120 slices'},
+ {name:'French fries 3/8" (frozen)',price:37.42,packQty:30,packUnit:'lb',unit:'oz',kind:'FOOD',yield:100,code:'470615',wid:'ING-FRIES'},
+ {name:'Sweet potato fries (frozen)',price:45.55,packQty:15,packUnit:'lb',unit:'oz',kind:'FOOD',yield:100,code:'817730',wid:'ING-FRIES-SWEET'},
+ {name:'Sweet potato, diced (frozen)',price:71.33,packQty:40,packUnit:'lb',unit:'oz',kind:'FOOD',yield:100,code:'869351',wid:'ING-SWEET-POTATO-DICED',note:'2 cases x 20 lb'},
+ {name:'32 oz round container + lid',price:69.52,packQty:150,packUnit:'each',unit:'each',kind:'PACK',yield:100,code:'147000',wid:'PKG-32OZ-ROUND'},
+ {name:'9x9 foam hinged, 1-compartment',price:23.14,packQty:150,packUnit:'each',unit:'each',kind:'PACK',yield:100,code:'831640',wid:'PKG-9X9-1C'},
+ {name:'9x9 foam hinged, 3-compartment',price:21.49,packQty:150,packUnit:'each',unit:'each',kind:'PACK',yield:100,code:'831650',wid:'PKG-9X9-3C'},
+].map(p=>({...p,src:'INVOICE',status:'PENDING',srcNote:INV+' · GFS #'+p.code+(p.note?' · '+p.note:'')}));
+// wid = the ID this item already has in the SOKAH workbook (INGREDIENTS / MEATS / packaging). Items without one are created there as NEW on import.
+let pantryLoadOk=false; let pantry=[];   // the pantry: every item with its price behind it (db when signed in, this phone otherwise). Seeded once from the invoice above.
+const norm=n=>String(n||'').trim().toLowerCase();
+const pid=n=>(norm(n).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'item');
+function pantryAll(){ return pantry.filter(p=>!p.deleted); }
+function pantryMatch(q){ q=norm(q); if(q.length<2) return []; const all=pantryAll().filter(p=>p.kind!=='SUPPLY');
+  const starts=all.filter(p=>norm(p.name).startsWith(q)), inc=all.filter(p=>!norm(p.name).startsWith(q)&&norm(p.name).includes(q));
+  return starts.concat(inc).slice(0,5); }
+
+// ---------- pure math (same rules as the SOKAH workbook) ----------
+let _seen=new Set();   // guards against two components that include each other
+function compCost(refId){   // live per-portion and per-unit food cost of a saved component
+  const x=lib.find(l=>l.id===refId); if(!x) return null; if(_seen.has(refId)) return {blocked:true}; _seen.add(refId); let t; try{ t=totals(x); } finally{ _seen.delete(refId); }
+  if(t.blocked||t.perPortion==null) return {blocked:true};
+  return {perPortion:t.perPortion, perUnit:t.perUnit, unit:x.batchUnit, name:x.name};
+}
+function lineCost(r){
+  const q=+r.qty, p=+r.price, pq=+r.packQty, y=(+r.yield||100)/100;
+  if(!r.name) return {cost:null,msg:'',sev:0};
+  if(r.kind==='RECIPE'){
+    const c=compCost(r.ref); if(!c) return {cost:null,msg:'FIX: that saved recipe is gone - remove this line',sev:2};
+    if(c.blocked) return {cost:null,msg:'FIX: the saved recipe has a line to fix - open it first',sev:2};
+    if(!(q>0)) return {cost:null,msg:'FIX: amount must be more than 0',sev:2};
+    if(r.unit==='portion') return {cost:q*c.perPortion,msg:'OK',sev:0,usablePer:c.perPortion};
+    const a=U[r.unit],b=U[c.unit]; if(!a||!b||a[0]!==b[0]) return {cost:null,msg:`FIX: use portion or ${c.unit} for this recipe`,sev:2};
+    const per=c.perUnit*(a[1]/b[1]); return {cost:q*per,msg:'OK',sev:0,usablePer:per};
+  }
+  if(!(q>0)) return {cost:null,msg:'FIX: amount must be more than 0',sev:2};
+  if(!(p>=0)||r.price==='') return {cost:null,msg:'FIX: what did you pay for it?',sev:2};
+  if(!(pq>0)) return {cost:null,msg:'FIX: "for this much" must be more than 0',sev:2};
+  if(!(y>0&&y<=1)) return {cost:null,msg:'FIX: usable % must be between 1 and 100',sev:2};
+  const a=U[r.unit],b=U[r.packUnit];
+  if(!a||!b) return {cost:null,msg:'FIX: choose units',sev:2};
+  if(a[0]!==b[0]) return {cost:null,msg:`FIX: ${r.unit} cannot convert to ${r.packUnit} (weight and volume need a measured density)`,sev:2};
+  const perUnit=p/(pq*b[1]);           // $ per base unit as purchased
+  const qtyBase=q*a[1];                 // usable qty in base units
+  const cost=qtyBase/y*perUnit;         // pay for what you bought, not what went in the pot
+  const msg = y<1 && r.ySrc!=='HOUSE' ? `CHECK: ${Math.round(y*100)}% is a standard estimate - weigh a case to make it yours`
+            : (()=>{ const live=pantryAll().find(p=>norm(p.name)===norm(r.name)); const src=live?live.src:r.src, st=live?live.status:r.status;
+                     return src==='INVOICE'&&st==='PENDING' ? 'CHECK: invoice price waiting for your approval (top of Pantry)' : src==='RECIPE' ? 'CHECK: typed in a recipe, not from an invoice' : 'OK'; })();
+  return {cost,msg,sev:msg==='OK'?0:1,usablePer:perUnit/y*(a[1])};
+}
+function totals(rec){
+  const rows=(rec.rows||[]).map(r=>({r,c:lineCost(r)}));
+  const blocked=rows.some(x=>x.c.sev===2&&x.r.name);
+  const food=rows.filter(x=>x.r.kind!=='PACK'&&x.c.cost!=null).reduce((s,x)=>s+x.c.cost,0);
+  const pack=rows.filter(x=>x.r.kind==='PACK'&&x.c.cost!=null).reduce((s,x)=>s+x.c.cost,0);
+  const bq=+rec.batchQty, ps=+rec.portionSize||1;
+  const portions = bq>0 ? bq/ps : null;
+  const perPortion = portions ? food/portions : null;
+  const packPer = portions ? pack/portions : null;
+  const t=(+rec.target||32)/100;
+  const price = perPortion!=null ? Math.ceil(Math.round(perPortion/t*1e6)/1e6/0.5)*0.5 : null;  // CEILING(ROUND(x,6),0.50)
+  const ap=(rec.kind2||'PLATE')==='COMPONENT'?0:approvedPrice(idOf(rec)); const mp=+rec.menuPrice>0?+rec.menuPrice:ap;
+  const fc = (mp>0 && perPortion!=null) ? perPortion/mp : null;
+  const perUnit = bq>0 ? food/bq : null;
+  return {rows,blocked,food,pack,portions,perPortion,packPer,price,fc,perUnit,budget: mp>0?mp*t:null,contrib: mp>0&&perPortion!=null ? mp-perPortion-(packPer||0) : null,approved:ap>0?ap:null,usedPrice:mp>0?mp:null,trying:+rec.menuPrice>0};
+}
+const idOf=r=>r.id||(r===rec?recId:null);
+let booting=true; const stillBooting=()=>{ if(booting){ toast('Still connecting - try again in a moment.'); return true; } return false; };
+let menuPrices=[];
+function approvedPrice(recipeId){ if(!recipeId) return 0; const today=new Date().toISOString().slice(0,10); const L=menuPrices.filter(m=>m.recipe===recipeId&&(m.effective||'')<=today).sort((a,b)=>(b.effective||'').localeCompare(a.effective||'')||(b.at||'').localeCompare(a.at||'')); return L.length?+L[0].price:0;
+}
+const money=v=>(v==null||v===''||isNaN(+v))?'—':'$'+(+v).toFixed(2);
+const money4=v=>(v==null||v===''||isNaN(+v))?'—':'$'+(+v).toFixed(4);
+
+// ---------- state ----------
+const EXAMPLE={name:'House BBQ sauce (example)',kind2:'COMPONENT',batchQty:100,batchUnit:'fl oz',portionSize:2,target:32,menuPrice:'',example:true,
+ rows:[{name:'Tomato base',qty:50,unit:'fl oz',price:9.60,packQty:1,packUnit:'gal',yield:100,kind:'FOOD'},
+       {name:'Brown sugar',qty:0.6,unit:'lb',price:16,packQty:20,packUnit:'lb',yield:100,kind:'FOOD'},
+       {name:'Yellow onion',qty:2,unit:'lb',price:25,packQty:50,packUnit:'lb',yield:88,ySrc:'STD',kind:'FOOD'},
+       {name:'Spice blend',qty:2.4,unit:'oz',price:22,packQty:2,packUnit:'lb',yield:100,kind:'FOOD'},
+       {name:'2 oz sauce cup + lid',qty:1,unit:'each',price:38,packQty:1000,packUnit:'each',yield:100,kind:'PACK'}]};
+let rec=JSON.parse(JSON.stringify(EXAMPLE)); let recId=null; let db=null, lib=[]; let openPick=null; let isDirty=false;
+// ---------- Supabase: one table "docs" (collection, id, data) + a private "invoices" bucket. Same call shapes the page already uses. ----------
+const SB_URL='https://jazyvgoinjrajzcrznif.supabase.co', SB_KEY='sb_publishable_qanEuSvb3c28Cqw1SWURAw_ipOMInIk';
+const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
+function makeDb(){ const q=(c)=>({ _c:c,_lim:1000,_ord:null,
+   doc(id){ return { async set(body){ const {error}=await sb.from('docs').upsert({collection:c,id,data:body},{onConflict:'collection,id'}); if(error) throw new Error(error.message); },
+                    async get(){ const {data,error}=await sb.from('docs').select('data').eq('collection',c).eq('id',id).maybeSingle(); if(error) throw new Error(error.message); return {exists:!!data,data:()=>data?data.data:undefined}; },
+                    async delete(){ const {error}=await sb.from('docs').delete().eq('collection',c).eq('id',id); if(error) throw new Error(error.message); } }; },
+   limit(n){ this._lim=n; return this; }, orderBy(f,d){ this._ord=[f,d]; return this; },
+   async get(){ const {data,error}=await sb.from('docs').select('id,data').eq('collection',c).limit(this._lim); if(error) throw new Error(error.message);
+     let rows=data.map(r=>({id:r.id,data:()=>r.data})); if(this._ord){ const [f,d]=this._ord; rows.sort((a,b)=>String(b.data()[f]||'').localeCompare(String(a.data()[f]||''))*(d==='desc'?1:-1)); } return {docs:rows}; } });
+  return { collection:q }; }
+const sbAssets={ async upload(file){ const path=new Date().toISOString().slice(0,10)+'/'+Date.now().toString(36)+'-'+(file.name||'photo').replace(/[^A-Za-z0-9._-]+/g,'_');
+    const {error}=await sb.storage.from('invoices').upload(path,file,{contentType:file.type||'application/octet-stream'}); if(error) throw new Error(error.message);
+    return {id:path,url:await sbAssets.url(path),sizeBytes:file.size,contentType:file.type}; },
+  async url(path){ const {data}=await sb.storage.from('invoices').createSignedUrl(path,60*60*24*7); return data?data.signedUrl:''; } };
+const $=id=>document.getElementById(id);
+function blankRow(kind){return {name:'',qty:'',unit:kind==='PACK'?'each':'oz',price:'',packQty:'',packUnit:kind==='PACK'?'each':'lb',yield:100,ySrc:'',kind}}
+function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+
+// ---------- render ----------
+function footHTML(r,c){return `<span>${c.msg?`<span class="status ${['ok','check','fix'][c.sev]}">${esc(c.msg)}</span>`:'<span class="hint">name it to cost it</span>'}${c.cost!=null&&c.usablePer?`<span class="hint"> · ${money4(c.usablePer)} per ${r.unit} usable</span>`:''}</span><span class="cost">${money(c.cost)}</span>`}
+function tryChips(r,i){
+  if((rec.kind2||'PLATE')!=='PLATE'||r.kind==='PACK'||!r.name) return '';
+  const q=+r.qty; if(!(q>0)) return '';
+  const step = r.unit==='oz'?1 : r.unit==='lb'?0.25 : r.unit==='each'?1 : r.unit==='fl oz'?1 : r.unit==='portion'?0.5 : null; if(step==null) return '';
+  const vals=[-2,-1,0,1,2].map(k=>+(q+k*step).toFixed(2)).filter(v=>v>0);
+  return `<div class="try"><span>Try</span>${vals.map(v=>`<button data-k="try" data-v="${v}" class="${v===q?'on':''}">${v} ${esc(r.unit)}</button>`).join('')}</div>`;
+}
+function renderRows(){
+  const host=$('rows'); host.innerHTML='';
+  rec.rows.forEach((r,i)=>{
+    const c=lineCost(r);
+    const d=document.createElement('div'); d.className='row'; d.dataset.i=i;
+    const opts=u=>UNITS.map(x=>`<option ${x===u?'selected':''}>${x}</option>`).join('');
+    if(r.kind==='RECIPE'){ const cc=compCost(r.ref)||{}; const units=['portion'].concat(cc.unit&&cc.unit!=='portion'?[cc.unit]:[]);
+      d.innerHTML=`<div class="row-top"><input id="n${i}" value="${esc(r.name)}" readonly style="opacity:.85"><button class="chip on" title="A saved recipe">RECIPE</button><button class="chip" data-k="del" aria-label="Remove this line">✕</button></div>
+      <div class="hint" style="margin-top:4px">from your saved recipe${cc.perPortion!=null?` · ${money(cc.perPortion)} per portion${cc.unit!=='portion'?` · ${money4(cc.perUnit)} per ${esc(cc.unit)}`:''}`:''}</div>
+      <div class="sub">On this plate</div>
+      <div class="row-mid"><label class="f"><span>Amount you use</span><input id="q${i}" type="number" inputmode="decimal" step="any" min="0" value="${r.qty}" data-k="qty" placeholder="e.g. 1"></label>
+      <label class="f"><span>Unit</span><select id="u${i}" data-k="unit">${units.map(u=>`<option ${u===r.unit?'selected':''}>${u}</option>`).join('')}</select></label></div>
+      <div class="trywrap" id="try${i}">${tryChips(r,i)}</div>
+      <div class="row-foot">${footHTML(r,c)}</div>`; host.appendChild(d); return; }
+    d.innerHTML=`
+      <div class="row-top"><input id="n${i}" placeholder="${r.kind==='PACK'?'Container or packaging item':'Ingredient name'}" value="${esc(r.name)}" data-k="name" autocomplete="off">
+        <button class="chip ${r.kind==='PACK'?'on':''}" data-k="kind" title="Tap to switch">${r.kind==='PACK'?'PACKAGING':'FOOD'}</button>
+        <button class="chip" data-k="del" aria-label="Remove this line">✕</button></div>
+      <div class="sugg" id="sg${i}" hidden></div>
+      ${r.srcNote?`<div class="hint" style="margin-top:4px">from ${esc(r.srcNote)}</div>`:''}
+      <div class="sub">In this batch</div>
+      <div class="row-mid">
+        <label class="f"><span>Amount you use</span><input id="q${i}" type="number" inputmode="decimal" step="any" min="0" value="${r.qty}" data-k="qty" placeholder="e.g. 2"></label>
+        <label class="f"><span>Unit</span><select id="u${i}" data-k="unit">${opts(r.unit)}</select></label>
+      </div>
+      <div class="trywrap" id="try${i}">${tryChips(r,i)}</div>
+      <div class="sub">From the invoice</div>
+      <div class="row-mid">
+        <label class="f"><span>You paid $</span><input id="p${i}" type="number" inputmode="decimal" step="0.01" min="0" value="${r.price}" data-k="price" placeholder="e.g. 25.00"></label>
+        <label class="f"><span>for this much</span><div style="display:flex;gap:4px"><input id="k${i}" type="number" inputmode="decimal" step="any" min="0" value="${r.packQty}" data-k="packQty" placeholder="50" style="width:52%"><select id="w${i}" data-k="packUnit" style="width:48%;padding-left:6px">${opts(r.packUnit)}</select></div></label>
+      </div>
+      ${r.kind==='PACK'?'':`<div class="sub">After trim</div>
+      <div class="row-yield">
+        <label class="f"><span>Usable after trim %</span><div style="display:flex;gap:4px"><input id="y${i}" type="number" inputmode="decimal" min="1" max="100" step="1" value="${r.yield}" data-k="yield" style="width:40%"><select id="ys${i}" data-k="ySrc" style="width:60%;padding-left:6px"><option value="" ${!r.ySrc?'selected':''}>no trim (100%)</option><option value="STD" ${r.ySrc==='STD'?'selected':''}>standard estimate</option><option value="HOUSE" ${r.ySrc==='HOUSE'?'selected':''}>weighed by us</option></select></div></label>
+        <button class="ghost sm" data-k="ypick">Pick a standard</button>
+      </div>
+      ${openPick===i?`<div class="ypick"><div class="hint">Typical usable yields (estimates until you weigh your own). Tap one.</div><div class="ylist">${YIELDS.map(([n,y])=>`<button data-k="ysel" data-y="${y}"><span>${n}</span><b>${y}%</b></button>`).join('')}</div></div>`:''}`}
+      <div class="row-foot">${footHTML(r,c)}</div>`;
+    host.appendChild(d);
+  });
+  if(!rec.rows.length) host.innerHTML='<div class="note">No ingredients yet. Tap "+ Add an ingredient" below.</div>';
+}
+const fmtN=n=>Number.isInteger(n)?n:n.toFixed(1);
+const fmtQ=n=>(n===''||n==null||isNaN(+n))?'?':(+(+n).toFixed(2)).toString();
+// "What gets me there": the biggest food line, what one unit of it costs, and the exact trim that hits the target
+function leverHTML(t, food, comp){
+  const top=food[0]; const r=top.r; const q=+r.qty;
+  const perUnitPortion = top.c.cost/q/t.portions;   // $ one unit (of r.unit) adds to one portion
+  const share=top.c.cost/t.food;
+  let html=`<div class="lever"><div class="tag">${comp?'What moves the cost':'What gets you there'}</div><div class="lv-main">`+
+    (comp ? `<b>${esc(r.name)}</b> is <b>${(share*100).toFixed(0)}%</b> of this batch (${money(top.c.cost)}). Use 10% less of it and the batch drops ${money(top.c.cost*0.1)}, the portion ${money4(top.c.cost*0.1/t.portions)}.`
+          : `<b>${esc(r.name)}</b> is <b>${(share*100).toFixed(0)}%</b> of the food on this plate. Each ${esc(r.unit)} of it adds <b>${money4(perUnitPortion)}</b> to a portion.`)+`</div>`;
+  if(comp){ html+=`<div class="hint">Pricing happens on the plate that uses this batch.</div>`; }
+  else if(t.budget!=null){
+    const diff=t.perPortion-t.budget;
+    if(diff>0.005){
+      const newQty=+( q - diff*t.portions*q/top.c.cost ).toFixed(2);   // batch qty that brings this portion exactly to budget
+      if(newQty>0){
+        html+=`<div class="lv-fix"><b>To hit ${(+rec.target||32)}%:</b> use <b>${fmtQ(newQty)} ${esc(r.unit)}</b> of ${esc(r.name)} instead of ${fmtQ(q)} ${esc(r.unit)} (saves ${money(diff)} a portion). <button class="sm ember" data-apply="${newQty}">Try it</button></div>`;
+      } else {
+        const alt=food[1];
+        html+=`<div class="lv-fix">Trimming ${esc(r.name)} alone cannot close the ${money(diff)} gap${alt?`, even to zero. Look at ${esc(alt.r.name)} (${((alt.c.cost/t.food)*100).toFixed(0)}%) too,`:'.'} or raise the price to ${money(t.price)}.</div>`;
+      }
+    } else html+=`<div class="lv-fix under">${Math.abs(diff)<0.005?'Right on target.':`You are ${money(Math.max(0,-diff))} under budget per portion. Room to add, or keep the margin.`}</div>`;
+  } else html+=`<div class="hint">Type the price you want in the dial above and this tells you exactly what to trim.</div>`;
+  return html+'</div>';
+}
+$('share').addEventListener('click',e=>{ const b=e.target.closest('[data-apply]'); if(!b) return; const t=totals(rec); const food=t.rows.filter(x=>x.r.kind!=='PACK'&&x.c.cost!=null).sort((a,b)=>b.c.cost-a.c.cost); if(!food.length) return; food[0].r.qty=+b.dataset.apply; if(rec.example) rec.example=false; dirty(); renderRows(); renderTotals(); toast(`Tried ${fmtQ(+b.dataset.apply)} ${food[0].r.unit} of ${food[0].r.name}`); });
+function renderTotals(){
+  const t=totals(rec); const tp=(+rec.target||32); const comp=(rec.kind2||'PLATE')==='COMPONENT';
+  $('kBatch').textContent=t.blocked?'FIX':money(t.food);
+  $('kPortion').textContent=t.blocked?'—':money(t.perPortion);
+  const fcEl=$('kFc'); fcEl.className='';
+  if(comp){
+    $('kPrice').textContent=t.blocked?'—':money4(t.perUnit); $('kPriceLab').textContent=`per ${rec.batchUnit||'unit'}`;
+    fcEl.textContent=t.blocked?'—':money(t.packPer); $('kFcLab').textContent='pack / portion';
+  } else {
+    $('kPrice').textContent=t.blocked?'—':money(t.price); $('kPriceLab').textContent=`price @ ${tp}%`;
+    if(t.fc!=null&&!t.blocked){fcEl.textContent=(t.fc*100).toFixed(1)+'%'; fcEl.className=t.fc<=tp/100?'good':(t.fc<=0.35?'warn':'bad'); $('kFcLab').textContent='food cost % now';}
+    else {fcEl.textContent='—'; $('kFcLab').textContent='food cost % (needs a price)';}
+  }
+  $('compNote').textContent = t.perPortion==null||t.blocked ? '' : `This batch costs ${money(t.food)} in food: ${money(t.perPortion)} per portion, ${money4(t.perUnit)} per ${rec.batchUnit}. A plate that uses 1 portion pays ${money(t.perPortion)}; one that uses 1 ${rec.batchUnit} pays ${money4(t.perUnit)}.`;
+  const u=rec.batchUnit, ps=+rec.portionSize||1;
+  $('portionNote').textContent = t.portions ? `${rec.batchQty} ${u} ÷ ${ps} ${u} per portion = ${fmtN(t.portions)} portions` : 'Type how much one batch makes and how big one portion is.';
+  let s='';
+  if(t.blocked) s='<span class="status fix">FIX the lines marked in step 2. Costs stay hidden until every line is good.</span>';
+  else if(t.perPortion==null) s='<span class="note">Fill in "one batch makes" in step 1 to see per-portion numbers.</span>';
+  else{
+    s=`<div class="kv">
+      <div><span class="tag">Food, whole batch</span><b>${money(t.food)}</b></div>
+      <div><span class="tag">Packaging per portion</span><b>${money(t.packPer)}</b></div>
+      <div><span class="tag">Food per portion</span><b>${money(t.perPortion)}</b></div>
+      ${comp?`<div><span class="tag">Food per ${esc(rec.batchUnit)}</span><b>${money4(t.perUnit)}</b></div>`:`<div><span class="tag">Suggested price @ ${tp}%</span><b style="color:var(--ember)">${money(t.price)}</b></div>`}
+      ${t.fc!=null&&!comp?`<div><span class="tag">At ${money(t.usedPrice)} ${t.trying?'(trying)':'(approved on Menu)'}</span><b>${(t.fc*100).toFixed(1)}% food cost</b></div>
+      <div><span class="tag">Left after food + packaging</span><b style="color:var(--green)">${money(t.contrib)}</b></div>`:''}
+    </div><div class="note">Packaging is counted in the cost but never in food cost %. "Left after" is not profit: labor, rent and card fees still come out of it.</div>`;
+  }
+  $('summary').innerHTML=s;
+  const sh=$('share'); sh.innerHTML='';
+  if(!t.blocked&&t.food>0){
+    sh.insertAdjacentHTML('beforeend','<div class="tag" style="margin-top:6px">Where the food money goes</div>');
+    const food=t.rows.filter(x=>x.r.kind!=='PACK'&&x.c.cost!=null).sort((a,b)=>b.c.cost-a.c.cost);
+    food.forEach(x=>{const pct=x.c.cost/t.food; sh.insertAdjacentHTML('beforeend',`<div class="s"><span>${esc(x.r.name)}</span><b>${(pct*100).toFixed(0)}%</b><div class="track"><div class="fill" style="width:${(pct*100).toFixed(1)}%"></div></div></div>`)});
+    if(t.portions && food.length) sh.insertAdjacentHTML('beforeend', leverHTML(t, food, comp));
+  }
+  $('exampleTag').hidden=!rec.example;
+  // target dial (step 3) mirrors the step-1 box
+  $('dialOut').textContent=tp+'%'; if(+$('targetSlider').value!==tp) $('targetSlider').value=Math.min(45,Math.max(18,tp));
+  [...$('chips').children].forEach(b=>b.classList.toggle('on',+b.dataset.t===tp));
+  if(t.perPortion==null||t.blocked) $('dialNote').innerHTML='Slide or tap a target, or type the price you want. Finish steps 1 and 2 to see what it means.';
+  else if(t.budget==null) $('dialNote').innerHTML=`At <b>${tp}%</b>, a portion with <b>${money(t.perPortion)}</b> of food should sell for <b>${money(t.price)}</b>. Type a price to work it the other way.`;
+  else { const diff=t.perPortion-t.budget; const need=Math.ceil(t.fc*100);
+    $('dialNote').innerHTML=`On a <b>${money(t.usedPrice)}</b> ${t.trying?'':'(approved) '}plate at <b>${tp}%</b> you can spend <b>${money(t.budget)}</b> on food. You are at <b>${money(t.perPortion)}</b> - `+
+      (diff<=0.005?`<span class="under">${money(-diff)} under budget (${(t.fc*100).toFixed(1)}%).</span>`
+       :`<span class="over">${money(diff)} over (${(t.fc*100).toFixed(1)}%).</span> To fit: trim ${money(diff)} of food per portion, raise the price to ${money(t.price)}, or accept a ${need}% target.`); }
+  renderNext(t);
+}
+$('kindSeg').addEventListener('click',e=>{const b=e.target.closest('button'); if(!b) return; rec.kind2=b.dataset.v; if(rec.example) rec.example=false; dirty(); renderHead(); renderTotals();});
+$('priceIn').addEventListener('input',e=>{rec.menuPrice=e.target.value; $('menuPrice').value=e.target.value; if(rec.example) rec.example=false; dirty(); renderTotals();});
+$('menuPrice').addEventListener('input',e=>{$('priceIn').value=e.target.value;});
+$('priceClear').onclick=()=>{rec.menuPrice=''; $('menuPrice').value=''; $('priceIn').value=''; dirty(); renderTotals();};
+function setTarget(v){ v=Math.round(+v); if(!(v>=1&&v<=99)) return; rec.target=v; $('target').value=v; if(rec.example) rec.example=false; dirty(); renderTotals(); }
+$('targetSlider').addEventListener('input',e=>setTarget(e.target.value));
+$('chips').addEventListener('click',e=>{const b=e.target.closest('button'); if(b) setTarget(b.dataset.t);});
+function renderNext(t){ const _t=t; $('apHint').textContent=_t.approved?`· approved ${money(_t.approved)} on Menu`:'· none approved yet';
+  const named=!!(rec.name&&rec.name.trim())&&!rec.example, batch=+rec.batchQty>0&&+rec.portionSize>0;
+  const hasLines=rec.rows.some(r=>r.name&&lineCost(r).cost!=null), good=hasLines&&!t.blocked, saved=!!recId&&!isDirty;
+  let n,msg;
+  if(rec.example) {n=1; msg='This is the example. Change the name or any number to make it yours, then follow the steps.';}
+  else if(!named) {n=1; msg='Give the recipe a name.';}
+  else if(!batch) {n=1; msg='Fill in how much one batch makes and how big one portion is.';}
+  else if(!hasLines) {n=2; msg='Add your first ingredient: amount used, what you paid, for how much.';}
+  else if(t.blocked) {n=2; msg='Fix the line(s) marked FIX. The cost will show once every line is complete.';}
+  else if(!saved) { const comp=(rec.kind2||'PLATE')==='COMPONENT'; n=(!comp&&good&&!rec.menuPrice)?3:4;
+    msg= comp ? 'Read the cost per portion and per unit in step 3, then save it in step 4. Pricing happens on the plate that uses this.'
+        : (good&&!rec.menuPrice ? 'Read the numbers. Pick a target or type the price you want in step 3, then save it in step 4.' : 'Looks complete. Save this recipe so you can find it again.');}
+  else {n=4; msg='Saved. Start a new recipe, or open a saved one below.';}
+  $('nextN').textContent=n; $('nextS').textContent=`${n} of 4`; $('nextM').textContent=msg;
+  const done=[named&&batch, good, good, saved];
+  [...$('stepsBar').children].forEach((el,i)=>el.classList.toggle('on',done[i]));
+  [1,2,3,4].forEach(i=>{const el=$('step'+i); el.classList.toggle('done',done[i-1]); el.textContent=done[i-1]?'✓':i;});
+}
+function renderHead(){ const comp=(rec.kind2||'PLATE')==='COMPONENT'; document.body.classList.toggle('comp',comp);
+  [...$('kindSeg').children].forEach(b=>b.classList.toggle('on',b.dataset.v===(comp?'COMPONENT':'PLATE')));
+  $('kindNote').textContent= comp ? 'A sauce, rub, side or prep batch. You get a cost per portion and per unit; pricing happens on the plate that uses it.' : 'A customer buys this as-is. You get a cost per portion and a suggested price.';
+  $('priceIn').value=rec.menuPrice??''; $('name').value=rec.name||''; $('batchQty').value=rec.batchQty??''; $('batchUnit').value=rec.batchUnit||'portion'; $('portionSize').value=rec.portionSize??''; $('target').value=rec.target??32; $('menuPrice').value=rec.menuPrice??''; }
+function renderAll(){renderHead();renderRows();renderTotals();}
+
+// ---------- events ----------
+['name','batchQty','batchUnit','portionSize','target','menuPrice'].forEach(k=>$(k).addEventListener('input',e=>{rec[k]=e.target.value; if(rec.example){rec.example=false;} dirty(); renderTotals();}));
+$('rows').addEventListener('input',e=>{
+  const row=e.target.closest('.row'); if(!row) return; const i=+row.dataset.i, k=e.target.dataset.k; if(!k) return;
+  const r=rec.rows[i]; r[k]=e.target.value;
+  if(k==='name'){ if(r.src){ r.src=''; r.srcNote=''; } showSugg(row,i,e.target.value); }
+  if(k==='yield'){ const v=+e.target.value; if(v>=100||!v){r.ySrc='';} else if(!r.ySrc){r.ySrc='HOUSE';} const s=row.querySelector('[data-k=ySrc]'); if(s) s.value=r.ySrc; }
+  if(k==='ySrc'&&e.target.value===''){ r.yield=100; const y=row.querySelector('[data-k=yield]'); if(y) y.value=100; }
+  if(rec.example) rec.example=false;
+  dirty();
+  row.querySelector('.row-foot').innerHTML=footHTML(r,lineCost(r));
+  if(k==='qty'||k==='unit'||k==='name'){ const w=row.querySelector('.trywrap'); if(w&&document.activeElement!==w) w.innerHTML=tryChips(r,i); }
+  renderTotals();
+});
+function showSugg(row,i,q){ const box=row.querySelector('.sugg'); if(!box) return; const m=pantryMatch(q);
+  if(!m.length||norm(q)===norm(rec.rows[i].name)&&rec.rows[i].src){ box.hidden=true; box.innerHTML=''; return; }
+  box.innerHTML=m.map((p,j)=>`<button data-k="pick" data-j="${j}"><span>${esc(p.name)}</span><small>${money(p.price)} for ${fmtQ(p.packQty)} ${esc(p.packUnit)}${perUnit(p)!=null?' · '+money4(perUnit(p))+' per '+esc(p.unit||p.packUnit):''}${p.status==='PENDING'?' · pending':''}${p.src==='RECIPE'?' · from a saved recipe':''}${p.stock==='OUT'?' · OUT':p.stock==='LOW'?' · LOW':''}</small></button>`).join('');
+  box._m=m; box.hidden=false; }
+document.addEventListener('click',e=>{ if(!e.target.closest('.sugg')&&!e.target.closest('[data-k=name]')) document.querySelectorAll('.sugg').forEach(b=>{b.hidden=true;}); });
+$('rows').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return; const i=+b.closest('.row').dataset.i; const k=b.dataset.k;
+  if(k==='pick'){ const box=b.closest('.sugg'); const p=box._m[+b.dataset.j]; const r=rec.rows[i];
+    Object.assign(r,{name:p.name,price:p.price,packQty:p.packQty,packUnit:p.packUnit,kind:p.kind,yield:p.yield||100,ySrc:p.ySrc||'',src:p.src,srcNote:p.srcNote||'',wid:p.wid||''});
+    if(!r.qty||(U[r.unit]||[])[0]!==(U[p.packUnit]||[])[0]) r.unit=p.unit||r.unit;
+    if(rec.example) rec.example=false; dirty(); renderRows(); renderTotals(); $('q'+i).focus(); toast(`Filled from your pantry: ${p.name}`); return; }
+  if(k==='del'){ rec.rows.splice(i,1); openPick=null; }
+  else if(k==='kind'){ rec.rows[i].kind=rec.rows[i].kind==='PACK'?'FOOD':'PACK'; if(rec.rows[i].kind==='PACK'){rec.rows[i].yield=100;rec.rows[i].ySrc='';} }
+  else if(k==='ypick'){ openPick=openPick===i?null:i; renderRows(); return; }
+  else if(k==='try'){ rec.rows[i].qty=+b.dataset.v; }
+  else if(k==='ysel'){ rec.rows[i].yield=+b.dataset.y; rec.rows[i].ySrc='STD'; openPick=null; toast(`${rec.rows[i].name||'Ingredient'}: ${b.dataset.y}% usable (standard estimate)`); }
+  else return;
+  if(rec.example) rec.example=false;
+  dirty(); renderRows(); renderTotals();
+});
+$('addRow').onclick=()=>{rec.rows.push(blankRow('FOOD')); if(rec.example) rec.example=false; dirty(); renderRows(); renderTotals(); $('n'+(rec.rows.length-1)).focus();};
+$('addComp').onclick=()=>{ const box=$('compPick'); const comps=lib.filter(x=>x.id!==recId&&!(x.rows||[]).some(r=>r.kind==='RECIPE'));
+  if(!comps.length){ toast('Nothing to add yet. Save a side or sauce first.'); return; }
+  box.innerHTML='<div class="tag" style="margin-bottom:6px">Pick a saved recipe to put on this plate</div><div class="lib">'+comps.map(x=>{const t=totals(x); return `<div class="r"><div><b>${esc(x.name)}</b><small>${t.perPortion!=null?money(t.perPortion)+' per portion':'has a line to fix'}</small></div><button class="sm" data-comp="${esc(x.id)}">Add</button></div>`;}).join('')+'</div><div class="btns" style="margin-top:8px"><button class="ghost sm" id="compClose">Close</button></div>';
+  box.hidden=false; box.scrollIntoView({block:'center'});
+  box.querySelectorAll('[data-comp]').forEach(b=>b.onclick=()=>{ const x=lib.find(l=>l.id===b.dataset.comp); rec.rows.push({name:x.name,qty:1,unit:'portion',kind:'RECIPE',ref:x.id,price:'',packQty:'',packUnit:'',yield:100,ySrc:''}); box.hidden=true; if(rec.example) rec.example=false; dirty(); renderRows(); renderTotals(); toast(`Added ${x.name}`); });
+  box.querySelector('#compClose').onclick=()=>{box.hidden=true;}; };
+$('addPack').onclick=()=>{rec.rows.push(blankRow('PACK')); if(rec.example) rec.example=false; dirty(); renderRows(); renderTotals(); $('n'+(rec.rows.length-1)).focus();};
+document.querySelectorAll('button.q').forEach(b=>b.onclick=()=>{ const x=$(b.dataset.x); x.hidden=!x.hidden; if(b.dataset.x==='x1'&&!x.hidden){$('guide').hidden=false;} });
+$('guideOk').onclick=()=>{ $('guide').hidden=true; try{localStorage.setItem('sokah-guide','seen')}catch(e){} };
+try{ if(localStorage.getItem('sokah-guide')==='seen') $('guide').hidden=true; }catch(e){}
+function renderLegend(){ const comp=(rec.kind2||'PLATE')==='COMPONENT';
+  $('legend').innerHTML = comp
+   ? `<div><b>Batch food</b> · every food line added up (no packaging)</div><div><b>Per portion</b> · batch food ÷ portions</div><div><b>Per ${esc(rec.batchUnit)}</b> · batch food ÷ what the batch makes</div><div><b>Pack / portion</b> · packaging cost per portion, kept out of food cost</div>`
+   : `<div><b>Batch food</b> · every food line added up (no packaging)</div><div><b>Per portion</b> · batch food ÷ portions</div><div><b>Price @ target</b> · per portion ÷ target %, rounded up to $0.50</div><div><b>Food cost %</b> · per portion ÷ the menu price you typed</div>`; }
+$('barTap').onclick=()=>{ const l=$('legend'); renderLegend(); l.hidden=!l.hidden; $('tapHint').hidden=!l.hidden; };
+
+// ---------- save / library ----------
+function dirty(){isDirty=true; $('savestate').textContent=recId?'edited - not saved':'not saved';}
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2800);}
+function validForSave(){ if(rec.example){toast('This is the example. Change the name or a number to make it yours, then save.');return false;} if(!rec.name||!rec.name.trim()){toast('Give the recipe a name first (step 1).');$('name').focus();return false;} return true; }
+async function saveRec(asCopy){
+  if(stillBooting()||!validForSave()) return;
+  const body=JSON.parse(JSON.stringify(rec)); body.savedAt=new Date().toISOString(); delete body.example;
+  if(!asCopy&&!recId){ const dupe=lib.find(x=>norm(x.name)===norm(body.name)); if(dupe){ toast(`You already have "${dupe.name}". Open it below to change it, or use a different name.`); return; } }
+  if(asCopy||!recId){ recId='r-'+Date.now().toString(36); if(asCopy) body.name=uniqueCopyName(body.name); rec.name=body.name; $('name').value=body.name; }
+  try{
+    if(db){ await db.collection('recipes').doc(recId).set(body); }
+    else { const L=lsRead(); L[recId]=body; lsWrite(L); }
+    isDirty=false; $('savestate').textContent='saved'; toast(`Saved "${body.name}"`); renderTotals(); loadLib(); learnPantry(body);
+  }catch(e){ toast('Could not save: '+(e&&e.message||'unknown error')); }
+}
+// a saved recipe teaches the pantry any typed ingredient it does not know yet; it never overwrites an item you set up or an invoice price
+async function learnPantry(body){
+  const items=body.rows.filter(r=>r.kind!=='RECIPE'&&r.name&&+r.price>=0&&r.price!==''&&+r.packQty>0&&r.src!=='INVOICE'&&!pantry.some(p=>p.id===pid(r.name)))
+    .map(r=>({name:r.name.trim(),price:+r.price,packQty:+r.packQty,packUnit:r.packUnit,unit:r.unit,kind:r.kind,yield:+r.yield||100,ySrc:r.ySrc||'',src:'RECIPE',srcNote:'saved recipe "'+body.name+'" · '+body.savedAt.slice(0,10),updatedAt:body.savedAt}));
+  for(const it of items){ try{ await putPantry(pid(it.name),it); }catch(e){} }
+}
+function lsP(){try{return JSON.parse(localStorage.getItem('sokah-pantry')||'{}')}catch(e){return {}}}
+async function putPantry(id,body){ body={...body}; delete body.id;
+  if(db) await db.collection('pantry').doc(id).set(body); else { const L=lsP(); L[id]=body; try{localStorage.setItem('sokah-pantry',JSON.stringify(L))}catch(e){} }
+  const i=pantry.findIndex(p=>p.id===id); if(i>=0) pantry[i]={id,...body}; else pantry.push({id,...body}); }
+async function loadPantry(){ try{
+  if(db){ const q=await db.collection('pantry').limit(500).get(); pantry=q.docs.map(d=>({id:d.id,...d.data()})); }
+  else pantry=Object.entries(lsP()).map(([id,v])=>({id,...v}));
+   pantryLoadOk=true; }catch(e){ pantry=[]; pantryLoadOk=false; }
+  // first run: put the invoice items in, once; older learned items without an id-shaped key are kept as they are
+  if(pantryLoadOk&&!pantry.length){ const store=db; for(const p of PANTRY_SEED){ if(store!==db) break; try{ await putPantry(pid(p.name),{...p,vendor:'Gordon Food Service',stock:'HAVE',onOrder:false,updatedAt:INV}); }catch(e){} } }
+  if(document.body.classList.contains('pv')) renderPantry(); }
+function uniqueCopyName(n){ const base=n.replace(/ \(copy( \d+)?\)$/,''); let k=1, name=base+' (copy)'; const names=new Set(lib.map(x=>norm(x.name))); while(names.has(norm(name))){k++; name=`${base} (copy ${k})`;} return name; }
+function lsRead(){try{return JSON.parse(localStorage.getItem('sokah-recipes')||'{}')}catch(e){return {}}}
+function lsWrite(o){try{localStorage.setItem('sokah-recipes',JSON.stringify(o))}catch(e){}}
+async function loadLib(){
+  try{
+    if(db){ const q=await db.collection('recipes').orderBy('savedAt','desc').limit(200).get(); lib=q.docs.map(d=>({name:'',rows:[],...d.data(),id:d.id})); }
+    else { const L=lsRead(); lib=Object.entries(L).map(([id,v])=>({name:'',rows:[],...v,id})).sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||'')); }
+  }catch(e){ lib=[]; }
+  const host=$('lib'); host.innerHTML='';
+  $('libhint').textContent = db ? `${lib.length} saved recipe${lib.length===1?'':'s'} shared with the kitchen` : `${lib.length} saved on this phone only (sign in to keep them on the page)`;
+  if(!lib.length){ host.innerHTML='<div class="note">Nothing saved yet. Your saved recipes will be listed here.</div>'; return; }
+  lib.forEach(x=>{ const t=totals(x); const d=document.createElement('div'); d.className='r';
+    d.innerHTML=`<div><b>${esc(x.name)}</b><small>${t.perPortion!=null?money(t.perPortion)+' per portion · ':''}${(x.kind2||'PLATE')==='PLATE'?(approvedPrice(x.id)?'sells at '+money(approvedPrice(x.id))+' · ':'no approved price · '):''}${x.rows.length} line${x.rows.length===1?'':'s'} · saved ${(x.savedAt||'').slice(0,10)}</small></div><div><button class="sm" data-a="open">Open</button><button class="sm ghost" data-a="send">Send to workbook</button><button class="sm danger" data-a="del">Delete</button></div>`;
+    d.querySelector('[data-a=open]').onclick=()=>{ rec=JSON.parse(JSON.stringify(x)); delete rec.id; recId=x.id; isDirty=false; openPick=null; $('savestate').textContent='saved'; renderAll(); window.scrollTo({top:0,behavior:'smooth'}); toast(`Opened "${x.name}"`); };
+    d.querySelector('[data-a=send]').onclick=()=>showExport(x);
+    const del=d.querySelector('[data-a=del]'); let armed=false;
+    del.onclick=async()=>{ const used=lib.filter(o=>o.id!==x.id&&(o.rows||[]).some(r=>r.kind==='RECIPE'&&r.ref===x.id)); if(used.length){ toast(`Used in ${used.map(o=>o.name).join(', ')} - remove it there first.`); return; }
+      if(!armed){armed=true; del.textContent='Tap again to delete'; setTimeout(()=>{armed=false; del.textContent='Delete';},4000); return;}
+      try{ if(db) await db.collection('recipes').doc(x.id).delete(); else {const L=lsRead(); delete L[x.id]; lsWrite(L);} if(recId===x.id){recId=null;dirty();renderTotals();} toast('Deleted'); loadLib(); }catch(e){toast('Could not delete');} };
+    host.appendChild(d); });
+}
+// ---------- Send to workbook: a transfer code Claude puts on the lean workbook's RECIPES + LINES tabs ----------
+const slug=(n,pre,max=22)=>(pre+String(n||'').toUpperCase().replace(/\(.*?\)/g,'').replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,'')).slice(0,max).replace(/-$/,'');
+const baseUnitOf=u=>({W:'lb',V:'fl oz',C:'each',P:'portion'})[(U[u]||['C'])[0]];
+function buildExport(x){
+  const comp=(x.kind2||'PLATE')==='COMPONENT'; const t=totals({...x,menuPrice:''}); const rid=slug(x.name,comp?'P-':'M-');
+  const lines=[], newIng=[], warn=[];
+  x.rows.forEach(r=>{ if(!r.name) return;
+    if(r.kind==='RECIPE'){ const c=lib.find(l=>l.id===r.ref); lines.push({ingredient:c?c.name:r.name,qty:+r.qty,unit:r.unit,ref:slug(c?c.name:r.name,'P-')}); return; }
+    const p=pantryAll().find(q=>norm(q.name)===norm(r.name));
+    if(!p){ newIng.push({id:slug(r.name, r.kind==='PACK'?'PKG-':'ING-'),name:r.name,category:r.kind==='PACK'?'PACKAGING':'FOOD',base:baseUnitOf(r.packUnit||r.unit),price:+r.price,packQty:+r.packQty,packUnit:r.packUnit,yield:+r.yield||100,ySrc:r.ySrc||''}); }
+    lines.push({ingredient:r.name,qty:+r.qty,unit:r.unit,ref:p?(p.wid||slug(r.name,'ING-')):slug(r.name, r.kind==='PACK'?'PKG-':'ING-')}); });
+  if(t.blocked) warn.unshift('This recipe has a line marked FIX - the workbook will show the same FIX.');
+  const ap=approvedPrice(x.id);
+  return {v:2,kind:comp?'COMPONENT':'PLATE',id:rid,name:x.name.replace(/ \(DRAFT.*?\)$/i,''),makes:+x.batchQty,unit:x.batchUnit,portion:+x.portionSize||1,target:+x.target||32,approvedPrice:ap||null,lines,newIngredients:newIng,warnings:warn,exportedAt:new Date().toISOString(),perPortion:t.perPortion};
+}
+function showExport(x){
+  const ex=buildExport(x); const code='SOKAH2:'+btoa(unescape(encodeURIComponent(JSON.stringify(ex))));
+  const box=$('compPick'); box.hidden=false;
+  box.innerHTML=`<div class="tag">Send "${esc(ex.name)}" to the workbook</div>
+   <div class="note" style="margin-top:6px">Lands on RECIPES as <b>${esc(ex.id)}</b> (${ex.kind==='COMPONENT'?'component':'plate'}) with ${ex.lines.length} line${ex.lines.length===1?'':'s'} on LINES.${ex.approvedPrice?` Approved price ${money(ex.approvedPrice)} goes on MENU.`:''}
+   ${ex.newIngredients.length?` <b>${ex.newIngredients.length} ingredient${ex.newIngredients.length===1?' is':'s are'} not in the pantry</b> (${esc(ex.newIngredients.map(n=>n.name).join(', '))}) - they are added to PANTRY with a PENDING price for you to approve.`:' Every ingredient is already in the pantry.'}</div>
+   ${ex.warnings.length?`<div class="status check" style="margin-top:6px">${esc(ex.warnings.join(' · '))}</div>`:''}
+   <div class="note" style="margin-top:8px"><b>How:</b> tap Copy, paste the code to Claude in chat. Claude puts it in the workbook and sends you the updated file.</div>
+   <textarea id="exCode" readonly style="width:100%;min-height:70px;margin-top:8px;font:16px/1.3 monospace;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--input);color:var(--input-ink)">${code}</textarea>
+   <div class="btns" style="margin-top:8px"><button class="ember" id="exCopy">Copy the code</button><button class="ghost sm" id="exPlain">Show in plain words</button><button class="ghost sm" id="exClose">Close</button></div>
+   <pre id="exText" hidden style="white-space:pre-wrap;font:13px/1.4 var(--body);background:var(--tint);border-radius:8px;padding:10px;margin-top:8px"></pre>`;
+  box.scrollIntoView({block:'start'});
+  box.querySelector('#exCopy').onclick=async()=>{ try{ await navigator.clipboard.writeText(code); toast('Copied. Paste it to Claude in chat.'); }catch(e){ const ta=box.querySelector('#exCode'); ta.focus(); ta.select(); toast('Select the code and copy it.'); } };
+  box.querySelector('#exPlain').onclick=()=>{ const p=box.querySelector('#exText'); p.hidden=!p.hidden;
+    p.textContent=[`RECIPES row:  ${ex.id} | ${ex.name} | ${ex.kind} | makes ${ex.makes} ${ex.unit} | portion ${ex.portion} ${ex.unit} | target ${ex.target}%`,'','LINES rows:',...ex.lines.map(l=>`  ${ex.name} | ${l.ingredient} | ${l.qty} | ${l.unit}`),'',
+      ...(ex.approvedPrice?[`MENU row:  ${ex.name} | ${money(ex.approvedPrice)}`,'']:[]),
+      ...(ex.newIngredients.length?['New on PANTRY (price PENDING on PRICES):',...ex.newIngredients.map(n=>`  ${n.id} | ${n.name} | ${n.category} | per ${n.base} | $${n.price} for ${n.packQty} ${n.packUnit}${n.yield<100?` | yield ${n.yield}% (${n.ySrc||'standard'})`:''}`)]:[])].join('\n'); };
+  box.querySelector('#exClose').onclick=()=>{box.hidden=true;};
+  try{ if(db) db.collection('exports').doc(ex.id.toLowerCase()+'-'+Date.now().toString(36)).set(ex); }catch(e){}
+}
+$('save').onclick=()=>saveRec(false); $('dup').onclick=()=>saveRec(true);
+$('newr').onclick=()=>{ rec={name:'',kind2:'PLATE',batchQty:'',batchUnit:'portion',portionSize:1,target:rec.target||32,menuPrice:'',rows:[blankRow('FOOD')]}; recId=null; openPick=null; dirty(); renderAll(); $('name').focus(); window.scrollTo({top:0}); };
+
+// ---------- pantry view: order list, invoices, items ----------
+const perUnit=p=>{ const b=U[p.packUnit], u=U[p.unit||p.packUnit]; if(!b||!u||b[0]!==u[0]||!(+p.packQty>0)) return null; return +p.price/(+p.packQty*b[1])*u[1]; };
+function pantryStatus(p){ if(!(+p.packQty>0)||p.price===''||!(+p.price>=0)) return ['fix','FIX: price or pack missing']; const b=U[p.packUnit],u=U[p.unit||p.packUnit]; if(!b||!u||b[0]!==u[0]) return ['fix',`FIX: ${p.unit} cannot convert to ${p.packUnit}`];
+  if(+p.yield<100&&p.ySrc!=='HOUSE') return ['check',`CHECK: ${p.yield}% usable is a standard estimate`]; if(p.status==='PENDING') return ['check','CHECK: invoice price, waiting for your approval (top of Pantry)']; if(p.src==='RECIPE') return ['check','CHECK: typed in a recipe, not from an invoice']; return ['ok','OK']; }
+function renderApprovals(){ const L=pantryAll().filter(p=>p.status==='PENDING').sort((a,b)=>(a.name||'').localeCompare(b.name||'')); $('apprSec').hidden=!L.length; if(!L.length){ $('apList').innerHTML=''; return; }
+  try{ if(!$('apName').value) $('apName').value=localStorage.getItem('sokah-name')||''; }catch(e){}
+  $('apList').innerHTML=L.map(p=>{ const pu=perUnit(p); const prev=p.prev&&p.prev.price!=null?` · was ${money(+p.prev.price)} for ${fmtQ(p.prev.packQty)} ${esc(p.prev.packUnit)}`:' · new item'; const chg=p.prev&&p.prev.price>0&&+p.prev.packQty>0&&pu!=null&&U[p.prev.packUnit]&&U[p.unit||p.packUnit]?(pu/( +p.prev.price/(+p.prev.packQty*U[p.prev.packUnit][1])*U[p.unit||p.packUnit][1])-1):null;
+    return `<div class="pi" data-id="${esc(p.id)}"><div><b>${esc(p.name)}</b><small>${money(+p.price)} for ${fmtQ(p.packQty)} ${esc(p.packUnit)}${pu!=null?' · <b style="display:inline;font-size:12px">'+money4(pu)+'</b> per '+esc(p.unit||p.packUnit):''}${prev}</small><small>${esc((p.srcNote||'').split(' · ').slice(0,2).join(' · '))}${chg!=null&&Math.abs(chg)>0.10?` · <span class="status check">${chg>0?'+':''}${(chg*100).toFixed(0)}% - BIG CHANGE</span>`:''}</small></div><div class="acts"><button data-a="rej" class="danger">Reject</button></div></div>`; }).join('');
+  $('apList').querySelectorAll('[data-a=rej]').forEach(b=>b.onclick=async()=>{ const p=pantry.find(x=>x.id===b.closest('.pi').dataset.id); const stamp=new Date().toISOString();
+    const body={...p,rejected:[...(p.rejected||[]),{price:p.price,packQty:p.packQty,packUnit:p.packUnit,srcNote:p.srcNote,on:stamp}],updatedAt:stamp};
+    if(p.prev&&p.prev.price!=null){ Object.assign(body,{price:p.prev.price,packQty:p.prev.packQty,packUnit:p.prev.packUnit,srcNote:p.prev.srcNote||'',status:p.prev.status||'APPROVED',src:p.prev.src||'INVOICE'}); delete body.prev; }
+    else { Object.assign(body,{price:'',packQty:'',status:'',src:'MANUAL',srcNote:'price rejected '+stamp.slice(0,10)+' - add the right one'}); delete body.prev; }
+    try{ await putPantry(p.id,body); }catch(e){ toast('Could not save'); return; } toast('Rejected - kept as history'); renderPantry(); }); }
+$('apAll').onclick=async()=>{ const who=$('apName').value.trim(); if(!who){ toast('Type your name first.'); $('apName').focus(); return; } const L=pantryAll().filter(p=>p.status==='PENDING'); if(!L.length){ toast('Nothing waiting.'); return; }
+  const on=new Date().toISOString().slice(0,10); const btn=$('apAll'); btn.disabled=true; let done=0, failed=0; btn.textContent=`Approving 0 of ${L.length}...`;
+  await Promise.all(L.map(async p=>{ const b={...p,status:'APPROVED',approvedBy:who,approvedOn:on,updatedAt:new Date().toISOString()}; delete b.prev; try{ await putPantry(p.id,b); done++; }catch(e){ failed++; } btn.textContent=`Approving ${done} of ${L.length}...`; }));
+  btn.disabled=false; btn.textContent='Approve all waiting'; try{localStorage.setItem('sokah-name',who)}catch(e){}
+  toast(failed?`Approved ${done}; ${failed} did not save - tap again.`:`Approved ${done} price${done===1?'':'s'} as ${who}. Recipes now use them as real.`); renderPantry(); };
+function renderPantry(){ renderApprovals();
+  const q=norm($('paSearch').value); const items=pantryAll().filter(p=>!q||norm(p.name).includes(q)||norm(p.code).includes(q)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  $('paHint').textContent=`${pantryAll().length} items · ${db?'shared with the kitchen':'this phone only'}`;
+  $('paList').innerHTML=items.length?items.map(p=>{ const pu=perUnit(p); const [k,m]=pantryStatus(p); const st=p.stock||'HAVE';
+    return `<div class="pi ${st==='LOW'?'low':st==='OUT'?'out':''}" data-id="${esc(p.id)}"><div><b data-a="edit">${esc(p.name)}</b><small>${money(p.price)} for ${fmtQ(p.packQty)} ${esc(p.packUnit)}${pu!=null?` · <b style="display:inline;font-size:12px">${money4(pu)}</b> per ${esc(p.unit||p.packUnit)}`:''}${+p.yield<100?` · ${p.yield}% usable`:''}${p.kind==='PACK'?' · packaging':p.kind==='SUPPLY'?' · supply':''}</small>${k==='ok'?'':`<small style="color:var(--${k==='fix'?'fix':'check'}-ink)">${esc(m.replace(/^CHECK: /,'').replace(/ is a standard estimate$/,' - standard estimate').replace('invoice price, waiting for your approval (workbook PRICES tab)','invoice price - waiting for your approval'))}</small>`}</div>
+      <div class="acts"><button class="low ${st==='LOW'?'on':''}" data-a="LOW">LOW</button><button class="out ${st==='OUT'?'on':''}" data-a="OUT">OUT</button><button class="ord ${p.onOrder?'on':''}" data-a="order" aria-label="Add to order">${p.onOrder?'✓':'+'}</button></div></div>`; }).join('')
+    :'<div class="note">No items match.</div>';
+  renderOrder();
+}
+$('paList').addEventListener('click',async e=>{ const b=e.target.closest('[data-a]'); if(!b) return; if(b.dataset.a!=='edit'&&stillBooting()) return; const id=b.closest('.pi').dataset.id; const p=pantry.find(x=>x.id===id); if(!p) return; const a=b.dataset.a;
+  if(a==='edit'){ editItem(id); return; }
+  if(a==='LOW'||a==='OUT'){ p.stock=(p.stock===a)?'HAVE':a; }
+  else if(a==='order'){ p.onOrder=!p.onOrder; }
+  p.updatedAt=new Date().toISOString(); try{ await putPantry(id,p); }catch(err){ toast('Could not save'); } renderPantry(); });
+$('paSearch').addEventListener('input',renderPantry);
+function renderOrder(){ const L=pantryAll().filter(p=>p.onOrder).sort((a,b)=>(a.vendor||'').localeCompare(b.vendor||'')||(a.name||'').localeCompare(b.name||''));
+  $('olist').innerHTML=L.length?L.map(p=>`<div class="o"><span>${esc(p.name)}<small style="display:block;color:var(--muted);font-size:12px">${esc(p.vendor||'')}${p.code?' #'+esc(p.code):''}${p.stock&&p.stock!=='HAVE'?' · '+p.stock:''}</small></span><b>${money(p.price)}<small style="display:block;color:var(--muted);font-size:11px;text-align:right">last, per ${fmtQ(p.packQty)} ${esc(p.packUnit)}</small></b><button class="sm ghost" data-rm="${esc(p.id)}" aria-label="Remove">✕</button></div>`).join(''):'<div class="note">Nothing on the order yet. Tap + on an item below.</div>';
+  const sum=L.reduce((s,p)=>s+(+p.price||0),0); $('oSum').textContent=L.length?`${L.length} item${L.length===1?'':'s'} · about ${money(sum)} at last prices (one pack each)`:'';
+  $('olist').querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{ const p=pantry.find(x=>x.id===b.dataset.rm); p.onOrder=false; await putPantry(p.id,p); renderPantry(); }); }
+function orderText(){ const L=pantryAll().filter(p=>p.onOrder); const by={}; L.forEach(p=>{(by[p.vendor||'Other']=by[p.vendor||'Other']||[]).push(p)});
+  return Object.entries(by).map(([v,items])=>`${v}\n`+items.map(p=>`  - ${p.name}${p.code?' (#'+p.code+')':''} - 1 x ${fmtQ(p.packQty)} ${p.packUnit} - last ${money(p.price)}`).join('\n')).join('\n\n')+`\n\nSOKAH order - ${new Date().toISOString().slice(0,10)}`; }
+$('oCopy').onclick=async()=>{ if(!pantryAll().some(p=>p.onOrder)){toast('Nothing on the order yet.');return;} try{ await navigator.clipboard.writeText(orderText()); toast('Order copied - paste it into a text or email.'); }catch(e){ alert(orderText()); } };
+$('oClear').onclick=async()=>{ const L=pantryAll().filter(p=>p.onOrder); if(!L.length){toast('Already empty.');return;} if(!$('oClear').dataset.armed){ $('oClear').dataset.armed='1'; $('oClear').textContent='Tap again to clear'; setTimeout(()=>{delete $('oClear').dataset.armed; $('oClear').textContent='Clear order';},4000); return; }
+  for(const p of L){ p.onOrder=false; await putPantry(p.id,p); } delete $('oClear').dataset.armed; $('oClear').textContent='Clear order'; renderPantry(); toast('Order cleared'); };
+function editItem(id){ const p=id?pantry.find(x=>x.id===id):{name:'',kind:'FOOD',unit:'oz',price:'',packQty:'',packUnit:'lb',yield:100,ySrc:'',vendor:'Gordon Food Service',code:'',note:'',src:'MANUAL',status:'',stock:'HAVE',onOrder:false};
+  const f=$('paForm'); f.hidden=false; const opts=(u,list)=>list.map(x=>`<option ${x===u?'selected':''}>${x}</option>`).join('');
+  f.innerHTML=`<div class="tag" style="margin-bottom:8px">${id?'Edit item':'New pantry item'}</div><div class="grid">
+   <label class="f"><span>Name</span><input id="peName" value="${esc(p.name)}" placeholder="e.g. Yellow onion, whole"></label>
+   <div class="grid g3"><label class="f"><span>You paid $</span><input id="pePrice" type="number" inputmode="decimal" step="0.01" min="0" value="${p.price}"></label><label class="f"><span>For this much</span><input id="pePackQty" type="number" inputmode="decimal" step="any" min="0" value="${p.packQty}" placeholder="36"></label><label class="f"><span>Pack unit</span><select id="pePackUnit">${opts(p.packUnit,UNITS.filter(u=>u!=='portion'))}</select></label></div>
+   <div class="grid g3"><label class="f"><span>Recipes use it in</span><select id="peUnit">${opts(p.unit||p.packUnit,UNITS.filter(u=>u!=='portion'))}</select></label><label class="f"><span>Food or packaging</span><select id="peKind"><option value="FOOD" ${p.kind!=='PACK'&&p.kind!=='SUPPLY'?'selected':''}>Food</option><option value="PACK" ${p.kind==='PACK'?'selected':''}>Packaging</option><option value="SUPPLY" ${p.kind==='SUPPLY'?'selected':''}>Supply (never in a recipe)</option></select></label><label class="f"><span>Vendor code</span><input id="peCode" value="${esc(p.code||'')}" placeholder="GFS #"></label></div>
+   <div class="grid g3"><label class="f"><span>Usable after trim %</span><input id="peYield" type="number" inputmode="decimal" min="1" max="100" step="1" value="${p.yield||100}"></label><label class="f"><span>That yield is</span><select id="peYSrc"><option value="" ${!p.ySrc?'selected':''}>no trim (100%)</option><option value="STD" ${p.ySrc==='STD'?'selected':''}>a standard estimate</option><option value="HOUSE" ${p.ySrc==='HOUSE'?'selected':''}>weighed by us</option></select></label><label class="f"><span>Vendor</span><input id="peVendor" value="${esc(p.vendor||'')}"></label></div>
+   <details><summary class="hint" style="cursor:pointer">Weigh a case to make the yield yours</summary><div class="grid g3" style="margin-top:8px"><label class="f"><span>Bought (${esc(p.packUnit||'lb')})</span><input id="wIn" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 55"></label><label class="f"><span>Usable after trim</span><input id="wOut" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 28"></label><div style="display:flex;align-items:end"><button class="sm" id="wUse" type="button" style="width:100%">Use it</button></div></div><div class="note" id="wNote">For brisket: raw packer weight in, sliced weight out.</div></details>
+   <details><summary class="hint" style="cursor:pointer">Pick a standard yield (typical published estimates)</summary><div class="chips" style="margin-top:8px">${YIELDS.map(([n,y])=>`<button class="sm" data-y="${y}">${esc(n)} ${y}%</button>`).join('')}</div></details>
+   <label class="f"><span>Note</span><input id="peNote" value="${esc(p.note||'')}"></label>
+   <div class="note">${p.src==='INVOICE'?`From ${esc(p.srcNote||'an invoice')}${p.status==='PENDING'?' · waiting for your approval (top of Pantry)':p.approvedBy?' · approved by '+esc(p.approvedBy)+' '+esc(p.approvedOn||''):''}.`:p.src==='RECIPE'?'Learned from a saved recipe. Replace the price with an invoice one when you have it.':'Typed by hand. Prices from an invoice photo replace this.'}</div>
+   <div class="btns"><button class="ember" id="peSave">${id?'Save changes':'Add to pantry'}</button><button class="ghost" id="peCancel">Cancel</button>${id?`<button class="danger" id="peDel">Delete</button>`:''}</div></div>`;
+  f.scrollIntoView({block:'start'});
+  f.querySelectorAll('[data-y]').forEach(b=>b.onclick=()=>{ $('peYield').value=b.dataset.y; $('peYSrc').value='STD'; });
+  $('wUse').onclick=()=>{ const a=+$('wIn').value,b=+$('wOut').value; if(!(a>0)||!(b>0)||b>a){ $('wNote').textContent='Type what you bought and what was usable; usable cannot be more than bought.'; return; } const y=Math.round(b/a*100); $('peYield').value=y; $('peYSrc').value='HOUSE'; $('wNote').textContent=`${b} ÷ ${a} = ${y}% usable, weighed by you. Save changes to keep it.`; };
+  $('peCancel').onclick=()=>{f.hidden=true;};
+  $('peSave').onclick=async()=>{ if(stillBooting()) return; const name=$('peName').value.trim(); if(!name){toast('Give it a name.');return;}
+    const nid=id||pid(name); if(pantry.some(x=>x.id!==(id||'')&&!x.deleted&&(norm(x.name)===norm(name)||(!id&&x.id===nid)))){toast('Another item already has that name.');return;}
+    const price=+$('pePrice').value, packQty=+$('pePackQty').value; if($('pePrice').value===''||!(price>=0)){toast('Type what you paid.');return;} if(!(packQty>0)){toast('"For this much" must be more than 0.');return;}
+    const packUnit=$('pePackUnit').value, unit=$('peUnit').value; if(U[packUnit][0]!==U[unit][0]){toast(`${unit} cannot convert to ${packUnit}. Pick units of the same kind.`);return;}
+    const y=+$('peYield').value||100; if(!(y>0&&y<=100)){toast('Usable % must be between 1 and 100.');return;}
+    const changedPrice=id&&(+p.price!==price||+p.packQty!==packQty||p.packUnit!==packUnit);
+    const body={...p,name,price,packQty,packUnit,unit,kind:$('peKind').value,code:$('peCode').value.trim(),vendor:$('peVendor').value.trim(),yield:y,ySrc:y>=100?'':($('peYSrc').value||'HOUSE'),note:$('peNote').value.trim(),updatedAt:new Date().toISOString()};
+    if(!id){ body.src='MANUAL'; body.status=''; body.stock='HAVE'; body.onOrder=false; } else if(changedPrice&&p.src==='INVOICE'){ body.src='MANUAL'; body.status=''; body.srcNote='changed by hand '+body.updatedAt.slice(0,10); }
+    delete body.deleted; try{ await putPantry(nid,body); }catch(err){ toast('Could not save'); return; } f.hidden=true; toast(id?'Saved':'Added to the pantry'); renderPantry(); };
+  if(id) $('peDel').onclick=async()=>{ const used=lib.filter(x=>(x.rows||[]).some(r=>r.kind!=='RECIPE'&&norm(r.name)===norm(p.name))); if(used.length){ toast(`Used in ${used.map(x=>x.name).join(', ')} - it stays while a saved recipe uses it.`); return; }
+    if(!$('peDel').dataset.armed){ $('peDel').dataset.armed='1'; $('peDel').textContent='Tap again to delete'; setTimeout(()=>{const b=$('peDel'); if(b){delete b.dataset.armed; b.textContent='Delete';}},4000); return; }
+    try{ await putPantry(id,{...p,deleted:true,onOrder:false,updatedAt:new Date().toISOString()}); }catch(err){ toast('Could not delete'); return; } f.hidden=true; toast('Deleted'); renderPantry(); };
+}
+$('paNew').onclick=()=>editItem(null);
+// invoices: the photo is kept in the app's private storage bucket
+let assets=null, invoices=[];
+function lsI(){try{return JSON.parse(localStorage.getItem('sokah-invoices')||'[]')}catch(e){return []}}
+async function loadInvoices(){ try{ if(db){ const q=await db.collection('invoices').limit(200).get(); invoices=q.docs.map(d=>({id:d.id,...d.data()})); } else invoices=lsI(); }catch(e){ invoices=[]; } renderInvoices(); }
+async function renderInvoices(){ const L=[...invoices].sort((a,b)=>(b.takenAt||'').localeCompare(a.takenAt||'')); if(assets) for(const v of L){ if(v.assetId&&!v._fresh){ try{ v.url=await sbAssets.url(v.assetId); v._fresh=true; }catch(e){} } }
+  $('invNote').textContent= assets ? 'Photos are kept with the app.' : (db ? 'Photo storage is not available on this sign-in; you can still send the photo to Claude in chat.' : 'Sign in on this page to keep photos here; for now, send the photo to Claude in chat.');
+  $('invList').innerHTML=L.length?L.map(v=>`<div class="inv"><img src="${esc(v.url||'')}" alt=""><div><b style="font-family:var(--display);font-size:16px">${esc(v.name||'Invoice')}</b><small>${(v.takenAt||'').slice(0,16).replace('T',' ')} · <span class="status ${v.status==='DONE'?'ok':v.status==='NEW'?'todo':'check'}">${esc(v.status==='NEW'?'NEW - tell Claude "new invoice"':v.status==='DONE'?'DONE - prices in the workbook':v.status||'')}</span></small>${v.note?`<small>${esc(v.note)}</small>`:''}</div><a class="sm ghost" href="${esc(v.url||'#')}" target="_blank" rel="noopener" style="font-size:12px;text-decoration:none;padding:8px 10px;border:1px solid var(--line);border-radius:8px;color:var(--ink)">Open</a></div>`).join(''):'<div class="note">No invoice photos yet.</div>'; }
+$('invBtn').onclick=()=>$('invFile').click();
+$('invFile').addEventListener('change',async e=>{ const file=e.target.files&&e.target.files[0]; if(!file) return; e.target.value=''; if(stillBooting()) return;
+  if(!assets){ toast('Photo storage is not available here - send the photo to Claude in chat instead.'); return; }
+  if(file.size>20*1024*1024){ toast('That file is over 20 MB. Take a smaller photo.'); return; }
+  toast('Saving the photo...'); let up; try{ up=await assets.upload(file); }catch(err){ toast('Could not save the photo: '+(err&&err.message||'unknown')); return; }
+  const id='inv-'+Date.now().toString(36); const doc={assetId:up.id,url:up.url,name:file.name||'Invoice photo',takenAt:new Date().toISOString(),status:'NEW',note:'',sizeBytes:up.sizeBytes,contentType:up.contentType};
+  try{ if(db) await db.collection('invoices').doc(id).set(doc); else { const L=lsI(); L.push({id,...doc}); try{localStorage.setItem('sokah-invoices',JSON.stringify(L))}catch(e2){} } }catch(err){ toast('Photo saved but could not list it: '+(err&&err.message||'')); }
+  invoices.push({id,...doc}); renderInvoices(); toast('Saved. Tell Claude "new invoice" and it goes into the workbook.'); });
+// recipe rows keep the price they were costed with; this pulls the pantry's newer prices into the open recipe
+function refreshFromPantry(){ let n=0; rec.rows.forEach(r=>{ if(r.kind==='RECIPE'||!r.name) return; const p=pantryAll().find(x=>norm(x.name)===norm(r.name)); if(!p) return;
+    if(+r.price!==+p.price||+r.packQty!==+p.packQty||r.packUnit!==p.packUnit||+(r.yield||100)!==+(p.yield||100)){ Object.assign(r,{price:p.price,packQty:p.packQty,packUnit:p.packUnit,yield:p.yield||100,ySrc:p.ySrc||'',src:p.src,srcNote:p.srcNote||'',wid:p.wid||''}); n++; } });
+  if(n){ if(rec.example) rec.example=false; dirty(); renderRows(); renderTotals(); } toast(n?`${n} line${n===1?'':'s'} updated from the pantry`:'Every line already matches the pantry.'); }
+const rp=document.createElement('button'); rp.className='ghost'; rp.id='refreshPantry'; rp.textContent='↻ Update prices from pantry'; $('addComp').after(rp); rp.onclick=refreshFromPantry;
+// the one switch between the recipe steps and the pantry
+function showView(v){ document.body.classList.toggle('pv',v==='pantry'); document.body.classList.toggle('mv',v==='menu'); [...$('viewSeg').children].forEach(b=>b.classList.toggle('on',b.dataset.view===v));
+  $('hTitle').textContent={recipe:'Recipes',pantry:'Pantry',menu:'Menu'}[v]; $('savestate').style.visibility=v==='recipe'?'visible':'hidden'; try{localStorage.setItem('sokah-view',v)}catch(e){}
+  if(v==='pantry'){ renderPantry(); renderInvoices(); } if(v==='menu') renderMenu(); if(v==='recipe') renderTotals(); window.scrollTo({top:0}); }
+const showPantry=on=>showView(on?'pantry':'recipe');
+$('viewSeg').addEventListener('click',e=>{ const b=e.target.closest('[data-view]'); if(b) showView(b.dataset.view); });
+// ---------- menu: approved prices, append-only, newest dated row wins ----------
+function lsM(){try{return JSON.parse(localStorage.getItem('sokah-menuprices')||'[]')}catch(e){return []}}
+async function loadMenuPrices(){ try{ if(db){ const q=await db.collection('menuPrices').limit(1000).get(); menuPrices=q.docs.map(d=>({id:d.id,...d.data()})); } else menuPrices=lsM(); }catch(e){ menuPrices=[]; } }
+async function addMenuPrice(doc){ const id='mp-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); if(db) await db.collection('menuPrices').doc(id).set(doc); else { const L=lsM(); L.push({id,...doc}); try{localStorage.setItem('sokah-menuprices',JSON.stringify(L))}catch(e){} } menuPrices.push({id,...doc}); }
+function renderMenu(){ const plates=lib.filter(x=>(x.kind2||'PLATE')==='PLATE').sort((a,b)=>(a.name||'').localeCompare(b.name||'')); const host=$('menuList');
+  if(!plates.length){ host.innerHTML='<div class="note">No plates saved yet. On Recipe, make one "Sold as a plate" and save it.</div>'; return; }
+  host.innerHTML=plates.map(x=>{ const t=totals({...x,menuPrice:''}); const ap=approvedPrice(x.id); const tp=+x.target||32; const fc=ap&&t.perPortion!=null&&!t.blocked?t.perPortion/ap:null; const cls=fc==null?'':fc<=tp/100?'ok':fc<=0.35?'check':'fix';
+    return `<div class="mi" data-id="${esc(x.id)}"><div class="top"><div><b class="nm">${esc(x.name)}</b><small>${t.blocked?'<span class="status fix">FIX a line on Recipe</span>':`food ${money(t.perPortion)} · packaging ${money(t.packPer)} · suggested @ ${tp}%: <b style="display:inline;font-size:12px">${money(t.price)}</b>`}</small>${fc!=null?`<small style="margin-top:4px"><span class="status ${cls}">${(fc*100).toFixed(1)}% food cost at ${money(ap)}</span></small>`:ap?'':'<small style="margin-top:4px"><span class="status todo">TO DO: set a price</span></small>'}</div>
+      <div><div class="ap">${ap?money(ap):'—'}</div><small style="text-align:right">approved price</small></div></div>
+      <div class="btns"><button class="sm" data-a="set">Set approved price</button><button class="sm ghost" data-a="hist">History</button><button class="sm ghost" data-a="open">Open recipe</button></div><div class="mbox"></div></div>`; }).join('');
+  host.querySelectorAll('.mi').forEach(card=>{ const id=card.dataset.id; const x=lib.find(r=>r.id===id); const box=card.querySelector('.mbox');
+    card.querySelector('[data-a=open]').onclick=()=>{ rec=JSON.parse(JSON.stringify(x)); delete rec.id; recId=x.id; isDirty=false; openPick=null; $('savestate').textContent='saved'; renderAll(); showView('recipe'); toast(`Opened "${x.name}"`); };
+    card.querySelector('[data-a=hist]').onclick=()=>{ const h=menuPrices.filter(m=>m.recipe===id).sort((a,b)=>(b.effective||'').localeCompare(a.effective||'')||(b.at||'').localeCompare(a.at||''));
+      box.innerHTML=h.length?`<div class="explain" style="margin-top:8px"><b>Price history</b>${h.map(m=>`<div style="font-size:13px">${esc(m.effective)}: <b style="display:inline;font-size:14px">${money(+m.price)}</b> · ${esc(m.by)}${m.reason?' · '+esc(m.reason):''}</div>`).join('')}</div>`:'<div class="note">No price set yet.</div>'; };
+    card.querySelector('[data-a=set]').onclick=()=>{ const t=totals({...x,menuPrice:''}); let nm=''; try{nm=localStorage.getItem('sokah-name')||''}catch(e){} const today=new Date().toISOString().slice(0,10);
+      box.innerHTML=`<div class="card" style="margin-top:8px"><div class="tag">New approved price for ${esc(x.name)}</div><div class="grid g3" style="margin-top:8px"><label class="f"><span>Price $</span><input class="mpP" type="number" inputmode="decimal" step="0.01" min="0" value="${t.price||''}"></label><label class="f"><span>From</span><input class="mpD" type="date" value="${today}"></label><label class="f"><span>Your name</span><input class="mpB" value="${esc(nm)}"></label></div><label class="f" style="margin-top:8px"><span>Reason (optional)</span><input class="mpR" placeholder="e.g. brisket went up"></label><div class="btns"><button class="ember sm mpOk">Approve this price</button><button class="ghost sm mpNo">Cancel</button></div><div class="note">The old price stays as history. Recipes use the newest dated price.</div></div>`;
+      box.querySelector('.mpNo').onclick=()=>{box.innerHTML='';};
+      box.querySelector('.mpOk').onclick=async()=>{ if(stillBooting()) return; const price=+box.querySelector('.mpP').value, by=box.querySelector('.mpB').value.trim(); if(!(price>0)){toast('Price must be more than 0.');return;} if(!by){toast('Your name is required for a price change.');return;}
+        try{ await addMenuPrice({recipe:id,price,effective:box.querySelector('.mpD').value||today,by,reason:box.querySelector('.mpR').value.trim(),at:new Date().toISOString()}); }catch(e){ toast('Could not save'); return; }
+        try{localStorage.setItem('sokah-name',by)}catch(e){} toast(`${x.name}: ${money(price)} approved by ${by}`); renderMenu(); }; }; }); }
+
+// ---------- boot ----------
+// ---------- sign-in gate ----------
+function showGate(on,msg){ $('gate').hidden=!on; if(msg) $('gNote').textContent=msg; }
+async function signedIn(){ const {data}=await sb.auth.getSession(); return data.session||null; }
+function wireGate(){
+$('gIn').onclick=async()=>{ const email=$('gEmail').value.trim(), password=$('gPass').value; if(!email||!password){ showGate(true,'Type your email and password.'); return; }
+  const {error}=await sb.auth.signInWithPassword({email,password}); if(error){ showGate(true,'Could not sign in: '+error.message); return; } location.reload(); };
+$('gUp').onclick=async()=>{ const email=$('gEmail').value.trim(), password=$('gPass').value; if(!email||password.length<8){ showGate(true,'Use your email and a password of at least 8 characters.'); return; }
+  const {error}=await sb.auth.signUp({email,password,options:{emailRedirectTo:location.href.split('#')[0]}}); if(error){ showGate(true,'Could not create the account: '+error.message); return; }
+  showGate(true,'Account created. Check your email for a confirmation link, then come back and sign in.'); };
+$('gForgot').onclick=async()=>{ const email=$('gEmail').value.trim(); if(!email){ showGate(true,'Type your email first.'); return; } const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.href.split('#')[0]}); showGate(true,error?error.message:'Reset email sent.'); };
+}
+// boot: decide the store FIRST (shared db or this phone), then load everything once. Never seed before the db has answered.
+renderAll();
+(async()=>{ wireGate(); if(!sb){ showGate(true,'The app could not load its storage library. Check the connection and reload.'); return; }
+  const ses=await signedIn(); if(!ses){ showGate(true); return; }
+  db=makeDb(); assets=sbAssets;
+  try{ const probe=await sb.from('docs').select('id').limit(1); if(probe.error) throw probe.error; }catch(e){ showGate(true,'Signed in, but this email is not on the kitchen list yet. Ask the owner to add it.'); await sb.auth.signOut(); return; }
+  const so=$('signout'); so.hidden=false; so.onclick=async()=>{ await sb.auth.signOut(); location.reload(); };
+  if('serviceWorker' in navigator && location.protocol==='https:'){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+  await loadMenuPrices(); await loadLib(); await loadPantry(); await loadInvoices(); booting=false; if(isDirty){ renderHead(); renderTotals(); } else renderAll(); if(document.body.classList.contains('mv')) renderMenu(); if(document.body.classList.contains('pv')) renderPantry(); renderInvoices(); })();
+try{ const v=localStorage.getItem('sokah-view'); if(v==='pantry'||v==='menu') showView(v); }catch(e){}
+</script></body></html>
