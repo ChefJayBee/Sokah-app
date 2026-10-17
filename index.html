@@ -168,6 +168,8 @@ body.pv,body.mv{padding-bottom:40px}
 .mi .ap{font:700 24px/1 var(--display);font-variant-numeric:tabular-nums;text-align:right}
 .mi .btns{margin-top:8px}
 .pgh{display:flex;justify-content:space-between;align-items:baseline;font:700 12px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:12px 0 0;padding:0 2px}.pgh:first-child{margin-top:0}.pgh small{font:500 11px var(--body);letter-spacing:0;text-transform:none}
+.vendseg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:0 0 8px;width:100%}.vendseg button{flex:1;min-height:38px;padding:6px 8px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;background:var(--surface);color:var(--muted);border-radius:0;border-right:1px solid var(--line)}.vendseg button:last-child{border-right:0}.vendseg button.on{background:var(--ink);color:var(--bg)}
+.ov{font:700 13px/1 var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--ink);margin:12px 0 2px;padding:6px 0 4px;border-bottom:2px solid var(--line);display:flex;justify-content:space-between}.ov:first-child{margin-top:0}.ov small{font:600 11px var(--body);letter-spacing:0;text-transform:none;color:var(--muted)}
 .catbar{display:flex;gap:6px;overflow-x:auto;padding:0 0 8px;margin:0 0 4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}.catbar::-webkit-scrollbar{display:none}
 .og{font:700 11px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:8px 0 2px}
 .pi{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
@@ -255,6 +257,7 @@ body.pv,body.mv{padding-bottom:40px}
       <dt>Delete</dt><dd>Inside the item. Blocked while a saved recipe uses it.</dd>
     </dl></div>
     <input class="search" id="paSearch" placeholder="search the pantry">
+    <div class="vendseg" id="vendSeg"></div>
     <div class="catbar" id="catBar"></div>
     <div class="note" id="catNote" hidden style="margin:0 0 8px"></div>
     <div class="btns" style="margin:0 0 10px"><button class="ember" id="paNew">+ Add an item</button><small id="paHint"></small></div>
@@ -844,15 +847,23 @@ function catOf(p){ return (p.cat&&String(p.cat).trim())||guessCat(p); }
 function allCats(){ const extra=[...new Set(pantryAll().map(p=>p.cat).filter(c=>c&&!CATS.includes(c)))].sort(); return CATS.slice(0,-1).concat(extra,['Other']); }
 function groupByCat(list){ const by=new Map(); for(const p of list){ const c=catOf(p); if(!by.has(c)) by.set(c,[]); by.get(c).push(p); } const order=allCats(); return [...by.entries()].sort((a,b)=>{ const ia=order.indexOf(a[0]), ib=order.indexOf(b[0]); return (ia<0?order.length:ia)-(ib<0?order.length:ib)||a[0].localeCompare(b[0]); }); }
 let catFilter='';
-function renderCatBar(){ const counts={}; pantryAll().forEach(p=>{ const c=catOf(p); counts[c]=(counts[c]||0)+1; }); const cats=allCats().filter(c=>counts[c]); if(catFilter&&!counts[catFilter]) catFilter='';
+// vendors: GFS and Curtze get their own switch; anything else is "Other"
+function vendorKey(p){ const v=(p.vendor||'').toLowerCase(); if(/gordon|gfs/.test(v)) return 'GFS'; if(/curtze/.test(v)) return 'Curtze'; return 'Other'; }
+const VENDORS=['GFS','Curtze','Other'];
+let vendorFilter=''; try{ vendorFilter=localStorage.getItem('sokah-vendor')||''; }catch(e){}
+function renderVendSeg(){ const counts={}; pantryAll().forEach(p=>{ const k=vendorKey(p); counts[k]=(counts[k]||0)+1; }); const vs=VENDORS.filter(v=>counts[v]); if(vendorFilter&&pantryAll().length&&!counts[vendorFilter]) vendorFilter='';
+  $('vendSeg').innerHTML=vs.length>1?[['','All']].concat(vs.map(v=>[v,v])).map(([v,l])=>`<button class="${vendorFilter===v?'on':''}" data-vend="${esc(v)}">${esc(l)}${v?` <span style="opacity:.6">${counts[v]}</span>`:''}</button>`).join(''):''; }
+$('vendSeg').addEventListener('click',e=>{ const b=e.target.closest('[data-vend]'); if(!b) return; vendorFilter=b.dataset.vend; try{ localStorage.setItem('sokah-vendor',vendorFilter); }catch(e){} renderPantry(); });
+function groupByVendor(list){ const by=new Map(); for(const p of list){ const k=vendorKey(p); if(!by.has(k)) by.set(k,[]); by.get(k).push(p); } return [...by.entries()].sort((a,b)=>VENDORS.indexOf(a[0])-VENDORS.indexOf(b[0])); }
+function renderCatBar(){ const counts={}; pantryAll().filter(p=>!vendorFilter||vendorKey(p)===vendorFilter).forEach(p=>{ const c=catOf(p); counts[c]=(counts[c]||0)+1; }); const cats=allCats().filter(c=>counts[c]); if(catFilter&&!counts[catFilter]) catFilter='';
   const guessed=pantryAll().filter(p=>!p.cat).length; $('catNote').hidden=!guessed; $('catNote').textContent=guessed?`${guessed} item${guessed===1?' is':'s are'} grouped by a guess. Open an item and set its category to make it stick.`:'';
   $('catBar').innerHTML=cats.length>1?[['','All']].concat(cats.map(c=>[c,c])).map(([v,l])=>`<button class="chip ${catFilter===v?'on':''}" data-cat="${esc(v)}">${esc(l)}${v?` <span style="opacity:.7">${counts[v]}</span>`:''}</button>`).join(''):''; }
 $('catBar').addEventListener('click',e=>{ const b=e.target.closest('[data-cat]'); if(!b) return; catFilter=b.dataset.cat; renderPantry(); });
-function renderPantry(){ renderApprovals(); renderCatBar();
-  const q=norm($('paSearch').value); const items=pantryAll().filter(p=>(!q||norm(p.name).includes(q)||norm(p.code).includes(q))&&(!catFilter||catOf(p)===catFilter)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+function renderPantry(){ renderApprovals(); renderVendSeg(); renderCatBar();
+  const q=norm($('paSearch').value); const items=pantryAll().filter(p=>(!q||norm(p.name).includes(q)||norm(p.code).includes(q))&&(!catFilter||catOf(p)===catFilter)&&(!vendorFilter||vendorKey(p)===vendorFilter)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   $('paHint').textContent=`${pantryAll().length} items · ${db?'shared with the kitchen':'this phone only'}`;
   const card=p=>{ const pu=perUnit(p); const [k,m]=pantryStatus(p); const st=p.stock||'HAVE';
-    return `<div class="pi ${st==='LOW'?'low':st==='OUT'?'out':''}" data-id="${esc(p.id)}"><div><b data-a="edit">${esc(p.name)}</b><small>${money(p.price)} for ${fmtQ(p.packQty)} ${esc(p.packUnit)}${pu!=null?` · <b style="display:inline;font-size:12px">${money4(pu)}</b> per ${esc(p.unit||p.packUnit)}`:''}${+p.yield<100?` · ${p.yield}% usable`:''}${p.kind==='PACK'?' · packaging':p.kind==='SUPPLY'?' · supply':''}</small>${k==='ok'?'':`<small style="color:var(--${k==='fix'?'fix':'check'}-ink)">${esc(m.replace(/^CHECK: /,'').replace(/ is a standard estimate$/,' - standard estimate').replace('invoice price, waiting for your approval (workbook PRICES tab)','invoice price - waiting for your approval'))}</small>`}</div>
+    return `<div class="pi ${st==='LOW'?'low':st==='OUT'?'out':''}" data-id="${esc(p.id)}"><div><b data-a="edit">${esc(p.name)}</b><small>${money(p.price)} for ${fmtQ(p.packQty)} ${esc(p.packUnit)}${pu!=null?` · <b style="display:inline;font-size:12px">${money4(pu)}</b> per ${esc(p.unit||p.packUnit)}`:''}${+p.yield<100?` · ${p.yield}% usable`:''}${p.kind==='PACK'?' · packaging':p.kind==='SUPPLY'?' · supply':''}${vendorKey(p)!=='Other'?' · '+vendorKey(p):''}</small>${k==='ok'?'':`<small style="color:var(--${k==='fix'?'fix':'check'}-ink)">${esc(m.replace(/^CHECK: /,'').replace(/ is a standard estimate$/,' - standard estimate').replace('invoice price, waiting for your approval (workbook PRICES tab)','invoice price - waiting for your approval'))}</small>`}</div>
       <div class="acts"><button class="low ${st==='LOW'?'on':''}" data-a="LOW">LOW</button><button class="out ${st==='OUT'?'on':''}" data-a="OUT">OUT</button><button class="ord ${p.onOrder?'on':''}" data-a="order" aria-label="Add to order">${p.onOrder?'✓':'+'}</button></div></div>`; };
   $('paList').innerHTML=items.length?groupByCat(items).map(([c,L])=>`<div class="pgh" data-group="${esc(c)}"><span>${esc(c)}</span><small>${L.length}</small></div>`+L.map(card).join('')).join('')
     :'<div class="note">No items match.</div>';
@@ -866,11 +877,11 @@ $('paList').addEventListener('click',async e=>{ const b=e.target.closest('[data-
 $('paSearch').addEventListener('input',renderPantry);
 function renderOrder(){ const L=pantryAll().filter(p=>p.onOrder).sort((a,b)=>(a.vendor||'').localeCompare(b.vendor||'')||(a.name||'').localeCompare(b.name||''));
   const oRow=p=>`<div class="o"><span>${esc(p.name)}<small style="display:block;color:var(--muted);font-size:12px">${esc(p.vendor||'')}${p.code?' #'+esc(p.code):''}${p.stock&&p.stock!=='HAVE'?' · '+p.stock:''}</small></span><b>${money(p.price)}<small style="display:block;color:var(--muted);font-size:11px;text-align:right">last, per ${fmtQ(p.packQty)} ${esc(p.packUnit)}</small></b><button class="sm ghost" data-rm="${esc(p.id)}" aria-label="Remove">✕</button></div>`;
-  $('olist').innerHTML=L.length?groupByCat(L).map(([c,items])=>`<div class="og" data-ogroup="${esc(c)}">${esc(c)}</div>`+items.map(oRow).join('')).join(''):'<div class="note">Nothing on the order yet. Tap + on an item below.</div>';
+  $('olist').innerHTML=L.length?groupByVendor(L).map(([v,vi])=>`<div class="ov" data-ovendor="${esc(v)}"><span>${esc(v)}</span><small>${vi.length} item${vi.length===1?'':'s'} · about ${money(vi.reduce((s,p)=>s+(+p.price||0),0))}</small></div>`+groupByCat(vi).map(([c,items])=>`<div class="og" data-ogroup="${esc(c)}">${esc(c)}</div>`+items.map(oRow).join('')).join('')).join(''):'<div class="note">Nothing on the order yet. Tap + on an item below.</div>';
   const sum=L.reduce((s,p)=>s+(+p.price||0),0); $('oSum').textContent=L.length?`${L.length} item${L.length===1?'':'s'} · about ${money(sum)} at last prices (one pack each)`:'';
   $('olist').querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{ const p=pantry.find(x=>x.id===b.dataset.rm); p.onOrder=false; await putPantry(p.id,p); renderPantry(); }); }
-function orderText(){ const L=pantryAll().filter(p=>p.onOrder); const by={}; L.forEach(p=>{(by[p.vendor||'Other']=by[p.vendor||'Other']||[]).push(p)});
-  return Object.entries(by).map(([v,items])=>`${v}\n`+groupByCat(items).map(([c,L])=>`  ${c.toUpperCase()}\n`+L.map(p=>`  - ${p.name}${p.code?' (#'+p.code+')':''} - 1 x ${fmtQ(p.packQty)} ${p.packUnit} - last ${money(p.price)}`).join('\n')).join('\n')).join('\n\n')+`\n\nSOKAH order - ${new Date().toISOString().slice(0,10)}`; }
+function orderText(){ const L=pantryAll().filter(p=>p.onOrder);
+  return groupByVendor(L).map(([v,items])=>`${v==='Other'?'OTHER':v.toUpperCase()}${v==='GFS'?' (Gordon Food Service)':''}\n`+groupByCat(items).map(([c,L])=>`  ${c.toUpperCase()}\n`+L.map(p=>`  - ${p.name}${p.code?' (#'+p.code+')':''} - 1 x ${fmtQ(p.packQty)} ${p.packUnit} - last ${money(p.price)}`).join('\n')).join('\n')).join('\n\n')+`\n\nSOKAH order - ${new Date().toISOString().slice(0,10)}`; }
 $('oCopy').onclick=async()=>{ if(!pantryAll().some(p=>p.onOrder)){toast('Nothing on the order yet.');return;} try{ await navigator.clipboard.writeText(orderText()); toast('Order copied - paste it into a text or email.'); }catch(e){ alert(orderText()); } };
 $('oClear').onclick=async()=>{ const L=pantryAll().filter(p=>p.onOrder); if(!L.length){toast('Already empty.');return;} if(!$('oClear').dataset.armed){ $('oClear').dataset.armed='1'; $('oClear').textContent='Tap again to clear'; setTimeout(()=>{delete $('oClear').dataset.armed; $('oClear').textContent='Clear order';},4000); return; }
   for(const p of L){ p.onOrder=false; await putPantry(p.id,p); } delete $('oClear').dataset.armed; $('oClear').textContent='Clear order'; renderPantry(); toast('Order cleared'); };
