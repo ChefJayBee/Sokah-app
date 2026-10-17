@@ -192,16 +192,22 @@ body.pv,body.mv{padding-bottom:40px}
 <div class="gate" id="gate" hidden><div class="card grid">
   <h1>SOKAH <span>·</span> Kitchen</h1>
   <div class="hint">Recipe costing, pantry and menu for the restaurant. Sign in to see the shared pantry.</div>
-  <label class="f"><span>Email</span><input id="gEmail" type="email" autocomplete="username" inputmode="email"></label>
-  <label class="f"><span>Password</span><input id="gPass" type="password" autocomplete="current-password"></label>
-  <div class="btns" style="margin-top:4px"><button class="ember" id="gIn" style="flex:1">Sign in</button><button class="ghost" id="gUp">Create account</button></div>
-  <div class="note" id="gNote">First time? Tap Create account with the email the owner added; you will get a confirmation email, then sign in.</div>
-  <div class="btns"><button class="ghost sm" id="gForgot">Forgot password</button></div>
+  <label class="f"><span>Email</span><input id="gEmail" type="email" autocomplete="username" inputmode="email" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+  <label class="f"><span>Password</span><div style="display:flex;gap:8px"><input id="gPass" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" style="flex:1"><button class="ghost sm" id="gShow" type="button">Show</button></div></label>
+  <div class="btns" style="margin-top:4px"><button class="ember" id="gIn" style="flex:1">Sign in</button></div>
+  <div class="note" id="gNote">Accounts are set up by the owner. No sign-up, no emails: use the email and password you were given. You stay signed in on this phone.</div>
+</div></div>
+<div class="gate" id="pwgate" hidden><div class="card grid">
+  <h1>Change password</h1>
+  <label class="f"><span>New password (8+ characters)</span><div style="display:flex;gap:8px"><input id="pw1" type="password" autocomplete="new-password" autocapitalize="off" autocorrect="off" style="flex:1"><button class="ghost sm" id="pwShow" type="button">Show</button></div></label>
+  <label class="f"><span>Type it again</span><input id="pw2" type="password" autocomplete="new-password" autocapitalize="off" autocorrect="off"></label>
+  <div class="btns" style="margin-top:4px"><button class="ember" id="pwSave" style="flex:1">Save password</button><button class="ghost" id="pwCancel">Cancel</button></div>
+  <div class="note" id="pwNote">Takes effect right away, on every phone. No email involved.</div>
 </div></div>
 
 <div class="wrap">
 <header>
-  <div><h1>SOKAH <span>·</span> <span id="hTitle" style="color:inherit">Recipes</span></h1><span class="tag" id="savestate" style="display:block;margin-top:3px">not saved</span><button class="ghost sm" id="signout" hidden style="margin-top:6px;min-height:26px;padding:2px 8px;font-size:11px">Sign out</button></div>
+  <div><h1>SOKAH <span>·</span> <span id="hTitle" style="color:inherit">Recipes</span></h1><span class="tag" id="savestate" style="display:block;margin-top:3px">not saved</span><div id="acct" hidden style="display:flex;gap:6px;margin-top:6px"><button class="ghost sm" id="signout" style="min-height:26px;padding:2px 8px;font-size:11px">Sign out</button><button class="ghost sm" id="chpw" style="min-height:26px;padding:2px 8px;font-size:11px">Change password</button></div></div>
   <div style="display:flex;gap:10px;align-items:center"><div class="vseg" id="viewSeg"><button data-view="recipe" class="on">Recipe</button><button data-view="pantry">Pantry</button><button data-view="menu">Menu</button></div></div>
 </header>
 
@@ -920,12 +926,17 @@ function renderMenu(){ const plates=lib.filter(x=>(x.kind2||'PLATE')==='PLATE').
 function showGate(on,msg){ $('gate').hidden=!on; if(msg) $('gNote').textContent=msg; }
 async function signedIn(){ const {data}=await sb.auth.getSession(); return data.session||null; }
 function wireGate(){
-$('gIn').onclick=async()=>{ const email=$('gEmail').value.trim(), password=$('gPass').value; if(!email||!password){ showGate(true,'Type your email and password.'); return; }
-  const {error}=await sb.auth.signInWithPassword({email,password}); if(error){ showGate(true,'Could not sign in: '+error.message); return; } location.reload(); };
-$('gUp').onclick=async()=>{ const email=$('gEmail').value.trim(), password=$('gPass').value; if(!email||password.length<8){ showGate(true,'Use your email and a password of at least 8 characters.'); return; }
-  const {error}=await sb.auth.signUp({email,password,options:{emailRedirectTo:location.href.split('#')[0]}}); if(error){ showGate(true,'Could not create the account: '+error.message); return; }
-  showGate(true,'Account created. Check your email for a confirmation link, then come back and sign in.'); };
-$('gForgot').onclick=async()=>{ const email=$('gEmail').value.trim(); if(!email){ showGate(true,'Type your email first.'); return; } const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.href.split('#')[0]}); showGate(true,error?error.message:'Reset email sent.'); };
+$('gShow').onclick=()=>{ const i=$('gPass'); i.type=i.type==='password'?'text':'password'; $('gShow').textContent=i.type==='password'?'Show':'Hide'; };
+$('pwShow').onclick=()=>{ const i=$('pw1'); i.type=i.type==='password'?'text':'password'; $('pwShow').textContent=i.type==='password'?'Show':'Hide'; };
+$('gIn').onclick=async()=>{ const email=$('gEmail').value.trim().toLowerCase(), password=$('gPass').value; if(!email||!password){ showGate(true,'Type your email and password.'); return; }
+  $('gIn').disabled=true; $('gIn').textContent='Signing in…';
+  const {error}=await sb.auth.signInWithPassword({email,password}); $('gIn').disabled=false; $('gIn').textContent='Sign in';
+  if(error){ showGate(true,/invalid/i.test(error.message)?'That email and password do not match. Check for a typo (tap Show to see the password), or ask the owner to reset it.':'Could not sign in: '+error.message); return; } location.reload(); };
+$('gPass').addEventListener('keydown',e=>{ if(e.key==='Enter') $('gIn').click(); });
+$('pwCancel').onclick=()=>{ $('pwgate').hidden=true; };
+$('pwSave').onclick=async()=>{ const a=$('pw1').value, b=$('pw2').value; if(a.length<8){ $('pwNote').textContent='Use at least 8 characters.'; return; } if(a!==b){ $('pwNote').textContent='The two passwords do not match.'; return; }
+  $('pwSave').disabled=true; const {error}=await sb.auth.updateUser({password:a}); $('pwSave').disabled=false;
+  if(error){ $('pwNote').textContent='Could not change it: '+error.message; return; } $('pw1').value=$('pw2').value=''; $('pwNote').textContent='Saved. Use the new password next time you sign in.'; setTimeout(()=>{ $('pwgate').hidden=true; $('pwNote').textContent='Takes effect right away, on every phone. No email involved.'; },1400); };
 }
 // boot: decide the store FIRST (shared db or this phone), then load everything once. Never seed before the db has answered.
 renderAll();
@@ -933,7 +944,7 @@ renderAll();
   const ses=await signedIn(); if(!ses){ showGate(true); return; }
   db=makeDb(); assets=sbAssets;
   try{ const probe=await sb.from('docs').select('id').limit(1); if(probe.error) throw probe.error; }catch(e){ showGate(true,'Signed in, but this email is not on the kitchen list yet. Ask the owner to add it.'); await sb.auth.signOut(); return; }
-  const so=$('signout'); so.hidden=false; so.onclick=async()=>{ await sb.auth.signOut(); location.reload(); };
+  $('acct').hidden=false; $('signout').onclick=async()=>{ await sb.auth.signOut(); location.reload(); }; $('chpw').onclick=()=>{ $('pwgate').hidden=false; $('pw1').focus(); };
   if('serviceWorker' in navigator && location.protocol==='https:'){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
   await loadMenuPrices(); await loadLib(); await loadPantry(); await loadInvoices(); booting=false; if(isDirty){ renderHead(); renderTotals(); } else renderAll(); if(document.body.classList.contains('mv')) renderMenu(); if(document.body.classList.contains('pv')) renderPantry(); renderInvoices(); })();
 try{ const v=localStorage.getItem('sokah-view'); if(v==='pantry'||v==='menu') showView(v); }catch(e){}
