@@ -167,6 +167,9 @@ body.pv,body.mv{padding-bottom:40px}
 .mi small{color:var(--muted);font-size:12px;display:block}
 .mi .ap{font:700 24px/1 var(--display);font-variant-numeric:tabular-nums;text-align:right}
 .mi .btns{margin-top:8px}
+.pgh{display:flex;justify-content:space-between;align-items:baseline;font:700 12px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:12px 0 0;padding:0 2px}.pgh:first-child{margin-top:0}.pgh small{font:500 11px var(--body);letter-spacing:0;text-transform:none}
+.catbar{display:flex;gap:6px;overflow-x:auto;padding:0 0 8px;margin:0 0 4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}.catbar::-webkit-scrollbar{display:none}
+.og{font:700 11px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:8px 0 2px}
 .pi{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
 .pi b{font-family:var(--display);font-size:17px;font-weight:700;display:block;cursor:pointer}
 .pi small{color:var(--muted);font-size:12px;display:block}
@@ -252,6 +255,8 @@ body.pv,body.mv{padding-bottom:40px}
       <dt>Delete</dt><dd>Inside the item. Blocked while a saved recipe uses it.</dd>
     </dl></div>
     <input class="search" id="paSearch" placeholder="search the pantry">
+    <div class="catbar" id="catBar"></div>
+    <div class="note" id="catNote" hidden style="margin:0 0 8px"></div>
     <div class="btns" style="margin:0 0 10px"><button class="ember" id="paNew">+ Add an item</button><small id="paHint"></small></div>
     <div class="card" id="paForm" hidden style="margin-bottom:10px"></div>
     <div class="list" id="paList" style="display:grid;gap:8px"></div>
@@ -824,12 +829,32 @@ $('apAll').onclick=async()=>{ const who=$('apName').value.trim(); if(!who){ toas
   await Promise.all(L.map(async p=>{ const b={...p,status:'APPROVED',approvedBy:who,approvedOn:on,updatedAt:new Date().toISOString()}; delete b.prev; try{ await putPantry(p.id,b); done++; }catch(e){ failed++; } btn.textContent=`Approving ${done} of ${L.length}...`; }));
   btn.disabled=false; btn.textContent='Approve all waiting'; try{localStorage.setItem('sokah-name',who)}catch(e){}
   toast(failed?`Approved ${done}; ${failed} did not save - tap again.`:`Approved ${done} price${done===1?'':'s'} as ${who}. Recipes now use them as real.`); renderPantry(); };
-function renderPantry(){ renderApprovals();
-  const q=norm($('paSearch').value); const items=pantryAll().filter(p=>!q||norm(p.name).includes(q)||norm(p.code).includes(q)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+// categories: a fixed starter list plus any the owner types in. Items without one get a guess (shown with ?) until it is saved.
+const CATS=['Meats','Produce','Dairy & eggs','Dry goods','Frozen','Sauces & spices','Beverages','Packaging','Supplies','Other'];
+function guessCat(p){ const n=norm(p.name||''); if(p.kind==='PACK') return 'Packaging'; if(p.kind==='SUPPLY') return 'Supplies';
+  if(/frozen|fries|ice cream/.test(n)) return 'Frozen';
+  if(/sauce|bbq|bouillon|base\b|spice|season|\bsalt\b|pepper|rub\b|vinegar|mustard|ketchup|mayo|dressing|hot sauce|jerk|marinade|granulated (onion|garlic)|(onion|garlic)[, ]+(granulated|powder|minced)|powder|dried|paprika|cumin|curry|allspice|thyme/.test(n)) return 'Sauces & spices';
+  if(/butter|cheese|cheddar|mozzarella|milk|cream|egg|yogurt/.test(n)) return 'Dairy & eggs';
+  if(/soda|water|juice|drink|beverage|tea\b|coffee|cola|sparkling|lemonade|punch/.test(n)) return 'Beverages';
+  if(/brisket|rib|chicken|pork|beef|steak|sausage|bacon|turkey|lamb|goat|oxtail|shrimp|fish|salmon|wing|meat|\bham\b/.test(n)) return 'Meats';
+  if(/onion|potato|lettuce|tomato|cabbage|carrot|celery|lime|lemon|garlic|ginger|plantain|cilantro|scallion|herb|fruit|banana|pineapple|mango|avocado|cucumber|greens|fresh/.test(n)) return 'Produce';
+  if(/rice|flour|sugar|bean|pea\b|bread|bun|roll|pasta|macaroni|noodle|oats|corn|tortilla|mix\b|breadcrumb|cracker|can\b|cans|canned|dry|shortening|oil\b|syrup|honey/.test(n)) return 'Dry goods';
+  return 'Other'; }
+function catOf(p){ return (p.cat&&String(p.cat).trim())||guessCat(p); }
+function allCats(){ const extra=[...new Set(pantryAll().map(p=>p.cat).filter(c=>c&&!CATS.includes(c)))].sort(); return CATS.slice(0,-1).concat(extra,['Other']); }
+function groupByCat(list){ const by=new Map(); for(const p of list){ const c=catOf(p); if(!by.has(c)) by.set(c,[]); by.get(c).push(p); } const order=allCats(); return [...by.entries()].sort((a,b)=>{ const ia=order.indexOf(a[0]), ib=order.indexOf(b[0]); return (ia<0?order.length:ia)-(ib<0?order.length:ib)||a[0].localeCompare(b[0]); }); }
+let catFilter='';
+function renderCatBar(){ const counts={}; pantryAll().forEach(p=>{ const c=catOf(p); counts[c]=(counts[c]||0)+1; }); const cats=allCats().filter(c=>counts[c]); if(catFilter&&!counts[catFilter]) catFilter='';
+  const guessed=pantryAll().filter(p=>!p.cat).length; $('catNote').hidden=!guessed; $('catNote').textContent=guessed?`${guessed} item${guessed===1?' is':'s are'} grouped by a guess. Open an item and set its category to make it stick.`:'';
+  $('catBar').innerHTML=cats.length>1?[['','All']].concat(cats.map(c=>[c,c])).map(([v,l])=>`<button class="chip ${catFilter===v?'on':''}" data-cat="${esc(v)}">${esc(l)}${v?` <span style="opacity:.7">${counts[v]}</span>`:''}</button>`).join(''):''; }
+$('catBar').addEventListener('click',e=>{ const b=e.target.closest('[data-cat]'); if(!b) return; catFilter=b.dataset.cat; renderPantry(); });
+function renderPantry(){ renderApprovals(); renderCatBar();
+  const q=norm($('paSearch').value); const items=pantryAll().filter(p=>(!q||norm(p.name).includes(q)||norm(p.code).includes(q))&&(!catFilter||catOf(p)===catFilter)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   $('paHint').textContent=`${pantryAll().length} items · ${db?'shared with the kitchen':'this phone only'}`;
-  $('paList').innerHTML=items.length?items.map(p=>{ const pu=perUnit(p); const [k,m]=pantryStatus(p); const st=p.stock||'HAVE';
+  const card=p=>{ const pu=perUnit(p); const [k,m]=pantryStatus(p); const st=p.stock||'HAVE';
     return `<div class="pi ${st==='LOW'?'low':st==='OUT'?'out':''}" data-id="${esc(p.id)}"><div><b data-a="edit">${esc(p.name)}</b><small>${money(p.price)} for ${fmtQ(p.packQty)} ${esc(p.packUnit)}${pu!=null?` · <b style="display:inline;font-size:12px">${money4(pu)}</b> per ${esc(p.unit||p.packUnit)}`:''}${+p.yield<100?` · ${p.yield}% usable`:''}${p.kind==='PACK'?' · packaging':p.kind==='SUPPLY'?' · supply':''}</small>${k==='ok'?'':`<small style="color:var(--${k==='fix'?'fix':'check'}-ink)">${esc(m.replace(/^CHECK: /,'').replace(/ is a standard estimate$/,' - standard estimate').replace('invoice price, waiting for your approval (workbook PRICES tab)','invoice price - waiting for your approval'))}</small>`}</div>
-      <div class="acts"><button class="low ${st==='LOW'?'on':''}" data-a="LOW">LOW</button><button class="out ${st==='OUT'?'on':''}" data-a="OUT">OUT</button><button class="ord ${p.onOrder?'on':''}" data-a="order" aria-label="Add to order">${p.onOrder?'✓':'+'}</button></div></div>`; }).join('')
+      <div class="acts"><button class="low ${st==='LOW'?'on':''}" data-a="LOW">LOW</button><button class="out ${st==='OUT'?'on':''}" data-a="OUT">OUT</button><button class="ord ${p.onOrder?'on':''}" data-a="order" aria-label="Add to order">${p.onOrder?'✓':'+'}</button></div></div>`; };
+  $('paList').innerHTML=items.length?groupByCat(items).map(([c,L])=>`<div class="pgh" data-group="${esc(c)}"><span>${esc(c)}</span><small>${L.length}</small></div>`+L.map(card).join('')).join('')
     :'<div class="note">No items match.</div>';
   renderOrder();
 }
@@ -840,11 +865,12 @@ $('paList').addEventListener('click',async e=>{ const b=e.target.closest('[data-
   p.updatedAt=new Date().toISOString(); try{ await putPantry(id,p); }catch(err){ toast('Could not save'); } renderPantry(); });
 $('paSearch').addEventListener('input',renderPantry);
 function renderOrder(){ const L=pantryAll().filter(p=>p.onOrder).sort((a,b)=>(a.vendor||'').localeCompare(b.vendor||'')||(a.name||'').localeCompare(b.name||''));
-  $('olist').innerHTML=L.length?L.map(p=>`<div class="o"><span>${esc(p.name)}<small style="display:block;color:var(--muted);font-size:12px">${esc(p.vendor||'')}${p.code?' #'+esc(p.code):''}${p.stock&&p.stock!=='HAVE'?' · '+p.stock:''}</small></span><b>${money(p.price)}<small style="display:block;color:var(--muted);font-size:11px;text-align:right">last, per ${fmtQ(p.packQty)} ${esc(p.packUnit)}</small></b><button class="sm ghost" data-rm="${esc(p.id)}" aria-label="Remove">✕</button></div>`).join(''):'<div class="note">Nothing on the order yet. Tap + on an item below.</div>';
+  const oRow=p=>`<div class="o"><span>${esc(p.name)}<small style="display:block;color:var(--muted);font-size:12px">${esc(p.vendor||'')}${p.code?' #'+esc(p.code):''}${p.stock&&p.stock!=='HAVE'?' · '+p.stock:''}</small></span><b>${money(p.price)}<small style="display:block;color:var(--muted);font-size:11px;text-align:right">last, per ${fmtQ(p.packQty)} ${esc(p.packUnit)}</small></b><button class="sm ghost" data-rm="${esc(p.id)}" aria-label="Remove">✕</button></div>`;
+  $('olist').innerHTML=L.length?groupByCat(L).map(([c,items])=>`<div class="og" data-ogroup="${esc(c)}">${esc(c)}</div>`+items.map(oRow).join('')).join(''):'<div class="note">Nothing on the order yet. Tap + on an item below.</div>';
   const sum=L.reduce((s,p)=>s+(+p.price||0),0); $('oSum').textContent=L.length?`${L.length} item${L.length===1?'':'s'} · about ${money(sum)} at last prices (one pack each)`:'';
   $('olist').querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{ const p=pantry.find(x=>x.id===b.dataset.rm); p.onOrder=false; await putPantry(p.id,p); renderPantry(); }); }
 function orderText(){ const L=pantryAll().filter(p=>p.onOrder); const by={}; L.forEach(p=>{(by[p.vendor||'Other']=by[p.vendor||'Other']||[]).push(p)});
-  return Object.entries(by).map(([v,items])=>`${v}\n`+items.map(p=>`  - ${p.name}${p.code?' (#'+p.code+')':''} - 1 x ${fmtQ(p.packQty)} ${p.packUnit} - last ${money(p.price)}`).join('\n')).join('\n\n')+`\n\nSOKAH order - ${new Date().toISOString().slice(0,10)}`; }
+  return Object.entries(by).map(([v,items])=>`${v}\n`+groupByCat(items).map(([c,L])=>`  ${c.toUpperCase()}\n`+L.map(p=>`  - ${p.name}${p.code?' (#'+p.code+')':''} - 1 x ${fmtQ(p.packQty)} ${p.packUnit} - last ${money(p.price)}`).join('\n')).join('\n')).join('\n\n')+`\n\nSOKAH order - ${new Date().toISOString().slice(0,10)}`; }
 $('oCopy').onclick=async()=>{ if(!pantryAll().some(p=>p.onOrder)){toast('Nothing on the order yet.');return;} try{ await navigator.clipboard.writeText(orderText()); toast('Order copied - paste it into a text or email.'); }catch(e){ alert(orderText()); } };
 $('oClear').onclick=async()=>{ const L=pantryAll().filter(p=>p.onOrder); if(!L.length){toast('Already empty.');return;} if(!$('oClear').dataset.armed){ $('oClear').dataset.armed='1'; $('oClear').textContent='Tap again to clear'; setTimeout(()=>{delete $('oClear').dataset.armed; $('oClear').textContent='Clear order';},4000); return; }
   for(const p of L){ p.onOrder=false; await putPantry(p.id,p); } delete $('oClear').dataset.armed; $('oClear').textContent='Clear order'; renderPantry(); toast('Order cleared'); };
@@ -857,20 +883,24 @@ function editItem(id){ const p=id?pantry.find(x=>x.id===id):{name:'',kind:'FOOD'
    <div class="grid g3"><label class="f"><span>Usable after trim %</span><input id="peYield" type="number" inputmode="decimal" min="1" max="100" step="1" value="${p.yield||100}"></label><label class="f"><span>That yield is</span><select id="peYSrc"><option value="" ${!p.ySrc?'selected':''}>no trim (100%)</option><option value="STD" ${p.ySrc==='STD'?'selected':''}>a standard estimate</option><option value="HOUSE" ${p.ySrc==='HOUSE'?'selected':''}>weighed by us</option></select></label><label class="f"><span>Vendor</span><input id="peVendor" value="${esc(p.vendor||'')}"></label></div>
    <details><summary class="hint" style="cursor:pointer">Weigh a case to make the yield yours</summary><div class="grid g3" style="margin-top:8px"><label class="f"><span>Bought (${esc(p.packUnit||'lb')})</span><input id="wIn" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 55"></label><label class="f"><span>Usable after trim</span><input id="wOut" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 28"></label><div style="display:flex;align-items:end"><button class="sm" id="wUse" type="button" style="width:100%">Use it</button></div></div><div class="note" id="wNote">For brisket: raw packer weight in, sliced weight out.</div></details>
    <details><summary class="hint" style="cursor:pointer">Pick a standard yield (typical published estimates)</summary><div class="chips" style="margin-top:8px">${YIELDS.map(([n,y])=>`<button class="sm" data-y="${y}">${esc(n)} ${y}%</button>`).join('')}</div></details>
+   <div class="grid"><label class="f"><span>Category (groups the pantry and the order list)</span><select id="peCat"><option value="" ${p.cat?'':'selected'}>Auto → ${esc(guessCat(p))}</option>${allCats().map(c=>`<option ${c===p.cat?'selected':''}>${esc(c)}</option>`).join('')}<option value="__new">+ New category…</option></select></label><label class="f" id="peCatNewWrap" hidden><span>New category name</span><input id="peCatNew" placeholder="e.g. Bar"></label></div>
    <label class="f"><span>Note</span><input id="peNote" value="${esc(p.note||'')}"></label>
    <div class="note">${p.src==='INVOICE'?`From ${esc(p.srcNote||'an invoice')}${p.status==='PENDING'?' · waiting for your approval (top of Pantry)':p.approvedBy?' · approved by '+esc(p.approvedBy)+' '+esc(p.approvedOn||''):''}.`:p.src==='RECIPE'?'Learned from a saved recipe. Replace the price with an invoice one when you have it.':'Typed by hand. Prices from an invoice photo replace this.'}</div>
    <div class="btns"><button class="ember" id="peSave">${id?'Save changes':'Add to pantry'}</button><button class="ghost" id="peCancel">Cancel</button>${id?`<button class="danger" id="peDel">Delete</button>`:''}</div></div>`;
   f.scrollIntoView({block:'start'});
   f.querySelectorAll('[data-y]').forEach(b=>b.onclick=()=>{ $('peYield').value=b.dataset.y; $('peYSrc').value='STD'; });
   $('wUse').onclick=()=>{ const a=+$('wIn').value,b=+$('wOut').value; if(!(a>0)||!(b>0)||b>a){ $('wNote').textContent='Type what you bought and what was usable; usable cannot be more than bought.'; return; } const y=Math.round(b/a*100); $('peYield').value=y; $('peYSrc').value='HOUSE'; $('wNote').textContent=`${b} ÷ ${a} = ${y}% usable, weighed by you. Save changes to keep it.`; };
+  $('peCat').onchange=()=>{ const nw=$('peCat').value==='__new'; $('peCatNewWrap').hidden=!nw; if(nw) $('peCatNew').focus(); };
+  const liveGuess=()=>{ $('peCat').options[0].textContent='Auto → '+guessCat({name:$('peName').value,kind:$('peKind').value}); }; $('peName').addEventListener('input',liveGuess); $('peKind').addEventListener('change',liveGuess);
   $('peCancel').onclick=()=>{f.hidden=true;};
   $('peSave').onclick=async()=>{ if(stillBooting()) return; const name=$('peName').value.trim(); if(!name){toast('Give it a name.');return;}
     const nid=id||pid(name); if(pantry.some(x=>x.id!==(id||'')&&!x.deleted&&(norm(x.name)===norm(name)||(!id&&x.id===nid)))){toast('Another item already has that name.');return;}
     const price=+$('pePrice').value, packQty=+$('pePackQty').value; if($('pePrice').value===''||!(price>=0)){toast('Type what you paid.');return;} if(!(packQty>0)){toast('"For this much" must be more than 0.');return;}
     const packUnit=$('pePackUnit').value, unit=$('peUnit').value; if(U[packUnit][0]!==U[unit][0]){toast(`${unit} cannot convert to ${packUnit}. Pick units of the same kind.`);return;}
     const y=+$('peYield').value||100; if(!(y>0&&y<=100)){toast('Usable % must be between 1 and 100.');return;}
+    let cat=$('peCat').value; if(cat==='') cat=guessCat({name,kind:$('peKind').value}); if(cat==='__new'){ cat=$('peCatNew').value.trim().replace(/\s+/g,' '); if(!cat){toast('Type a name for the new category.');return;} if(cat.length>24){toast('Keep the category name under 24 characters.');return;} const dup=allCats().find(c=>norm(c)===norm(cat)); if(dup) cat=dup; }
     const changedPrice=id&&(+p.price!==price||+p.packQty!==packQty||p.packUnit!==packUnit);
-    const body={...p,name,price,packQty,packUnit,unit,kind:$('peKind').value,code:$('peCode').value.trim(),vendor:$('peVendor').value.trim(),yield:y,ySrc:y>=100?'':($('peYSrc').value||'HOUSE'),note:$('peNote').value.trim(),updatedAt:new Date().toISOString()};
+    const body={...p,name,cat,price,packQty,packUnit,unit,kind:$('peKind').value,code:$('peCode').value.trim(),vendor:$('peVendor').value.trim(),yield:y,ySrc:y>=100?'':($('peYSrc').value||'HOUSE'),note:$('peNote').value.trim(),updatedAt:new Date().toISOString()};
     if(!id){ body.src='MANUAL'; body.status=''; body.stock='HAVE'; body.onOrder=false; } else if(changedPrice&&p.src==='INVOICE'){ body.src='MANUAL'; body.status=''; body.srcNote='changed by hand '+body.updatedAt.slice(0,10); }
     delete body.deleted; try{ await putPantry(nid,body); }catch(err){ toast('Could not save'); return; } f.hidden=true; toast(id?'Saved':'Added to the pantry'); renderPantry(); };
   if(id) $('peDel').onclick=async()=>{ const used=lib.filter(x=>(x.rows||[]).some(r=>r.kind!=='RECIPE'&&norm(r.name)===norm(p.name))); if(used.length){ toast(`Used in ${used.map(x=>x.name).join(', ')} - it stays while a saved recipe uses it.`); return; }
